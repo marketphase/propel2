@@ -65,8 +65,12 @@ class MigrationMigrateCommand extends AbstractCommand
 
         $connections = [];
         $optionConnections = $input->getOption('connection');
+        $optionConnectionConfig = $input->getOption('connection_config');
+
         if (!$optionConnections) {
             $connections = $generatorConfig->getBuildConnections();
+        } elseif ($optionConnectionConfig) {
+            $connections = [$generatorConfig->getBuildConnections()[$optionConnectionConfig]];
         } else {
             foreach ($optionConnections as $connection) {
                 [$name, $dsn, $infos] = $this->parseConnection($connection);
