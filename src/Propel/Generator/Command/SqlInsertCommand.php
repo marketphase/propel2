@@ -28,6 +28,7 @@ class SqlInsertCommand extends AbstractCommand
         $this
             ->addOption('sql-dir', null, InputOption::VALUE_REQUIRED, 'The SQL files directory')
             ->addOption('connection', null, InputOption::VALUE_IS_ARRAY | InputOption::VALUE_REQUIRED, 'Connection to use. Example: \'bookstore=mysql:host=127.0.0.1;dbname=test;user=root;password=foobar\' where "bookstore" is your propel database name (used in your schema.xml)')
+            ->addOption('connection_config', null, InputOption::VALUE_REQUIRED, 'Connection configuration to use')
             ->setName('sql:insert')
             ->setAliases(['insert-sql'])
             ->setDescription('Insert SQL statements');
@@ -49,8 +50,14 @@ class SqlInsertCommand extends AbstractCommand
 
         $connections = [];
         $optionConnections = $input->getOption('connection');
+        $optionConnectionConfig = $input->getOption('connection_config');
         if (!$optionConnections) {
             $connections = $generatorConfig->getBuildConnections();
+            if ($optionConnectionConfig) {
+                $connections = [
+                    $optionConnectionConfig => $generatorConfig->getBuildConnections()[$optionConnectionConfig]
+                ];
+            }
         } else {
             foreach ($optionConnections as $connection) {
                 [$name, $dsn, $infos] = $this->parseConnection($connection);

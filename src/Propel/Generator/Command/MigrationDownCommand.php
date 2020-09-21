@@ -32,6 +32,7 @@ class MigrationDownCommand extends AbstractCommand
             ->addOption('output-dir', null, InputOption::VALUE_REQUIRED, 'The output directory')
             ->addOption('migration-table', null, InputOption::VALUE_REQUIRED, 'Migration table name')
             ->addOption('connection', null, InputOption::VALUE_IS_ARRAY | InputOption::VALUE_REQUIRED, 'Connection to use', [])
+            ->addOption('connection_config', null, InputOption::VALUE_REQUIRED, 'Connection configuration to use')
             ->addOption('fake', null, InputOption::VALUE_NONE, 'Does not touch the actual schema, but marks previous migration as executed.')
             ->addOption('force', null, InputOption::VALUE_NONE, 'Continues with the migration even when errors occur.')
             ->setName('migration:down')
@@ -65,8 +66,14 @@ class MigrationDownCommand extends AbstractCommand
 
         $connections = [];
         $optionConnections = $input->getOption('connection');
+        $optionConnectionConfig = $input->getOption('connection_config');
         if (!$optionConnections) {
             $connections = $generatorConfig->getBuildConnections();
+            if ($optionConnectionConfig) {
+                $connections = [
+                    $optionConnectionConfig => $generatorConfig->getBuildConnections()[$optionConnectionConfig]
+                ];
+            }
         } else {
             foreach ($optionConnections as $connection) {
                 [$name, $dsn, $infos] = $this->parseConnection($connection);
@@ -113,6 +120,9 @@ class MigrationDownCommand extends AbstractCommand
         }
 
         foreach ($migration->getDownSQL() as $datasource => $sql) {
+            if (!array_key_exists($datasource, $connections)) {
+                continue;
+            }
             $connection = $manager->getConnection($datasource);
 
             if ($input->getOption('verbose')) {

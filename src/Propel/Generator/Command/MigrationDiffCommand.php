@@ -37,6 +37,7 @@ class MigrationDiffCommand extends AbstractCommand
             ->addOption('output-dir', null, InputOption::VALUE_REQUIRED, 'The output directory where the migration files are located')
             ->addOption('migration-table', null, InputOption::VALUE_REQUIRED, 'Migration table name', null)
             ->addOption('connection', null, InputOption::VALUE_IS_ARRAY | InputOption::VALUE_REQUIRED, 'Connection to use. Example: \'bookstore=mysql:host=127.0.0.1;dbname=test;user=root;password=foobar\' where "bookstore" is your propel database name (used in your schema.xml)', [])
+            ->addOption('connection_config', null, InputOption::VALUE_REQUIRED, 'Connection configuration to use')
             ->addOption('table-renaming', null, InputOption::VALUE_NONE, 'Detect table renaming', null)
             ->addOption('editor', null, InputOption::VALUE_OPTIONAL, 'The text editor to use to open diff files', null)
             ->addOption('skip-removed-table', null, InputOption::VALUE_NONE, 'Option to skip removed table from the migration')
@@ -86,8 +87,14 @@ class MigrationDiffCommand extends AbstractCommand
 
         $connections = [];
         $optionConnections = $input->getOption('connection');
+        $optionConnectionConfig = $input->getOption('connection_config');
         if (!$optionConnections) {
             $connections = $generatorConfig->getBuildConnections();
+            if ($optionConnectionConfig) {
+                $connections = [
+                    $optionConnectionConfig => $generatorConfig->getBuildConnections()[$optionConnectionConfig]
+                ];
+            }
         } else {
             foreach ($optionConnections as $connection) {
                 [$name, $dsn, $infos] = $this->parseConnection($connection);

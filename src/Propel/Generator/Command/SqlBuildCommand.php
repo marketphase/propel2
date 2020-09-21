@@ -32,6 +32,7 @@ class SqlBuildCommand extends AbstractCommand
             ->addOption('validate', null, InputOption::VALUE_NONE, '')
             ->addOption('overwrite', null, InputOption::VALUE_NONE, '')
             ->addOption('connection', null, InputOption::VALUE_IS_ARRAY | InputOption::VALUE_REQUIRED, 'Connection to use', [])
+            ->addOption('connection_config', null, InputOption::VALUE_REQUIRED, 'Connection configuration to use')
             ->addOption('schema-name', null, InputOption::VALUE_REQUIRED, 'The schema name for RDBMS supporting them', '')
             //->addOption('encoding',     null, InputOption::VALUE_REQUIRED,  'The encoding to use for the database')
             ->addOption('table-prefix', null, InputOption::VALUE_REQUIRED, 'Add a prefix to all the table names in the database')
@@ -87,8 +88,14 @@ class SqlBuildCommand extends AbstractCommand
 
         $connections = [];
         $optionConnections = $input->getOption('connection');
+        $optionConnectionConfig = $input->getOption('connection_config');
         if (!$optionConnections) {
             $connections = $generatorConfig->getBuildConnections();
+            if ($optionConnectionConfig) {
+                $connections = [
+                    $optionConnectionConfig => $generatorConfig->getBuildConnections()[$optionConnectionConfig]
+                ];
+            }
         } else {
             foreach ($optionConnections as $connection) {
                 [$name, $dsn, $infos] = $this->parseConnection($connection);

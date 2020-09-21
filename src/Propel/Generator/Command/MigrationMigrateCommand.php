@@ -70,8 +70,11 @@ class MigrationMigrateCommand extends AbstractCommand
 
         if (!$optionConnections) {
             $connections = $generatorConfig->getBuildConnections();
-        } elseif ($optionConnectionConfig) {
-            $connections = [$generatorConfig->getBuildConnections()[$optionConnectionConfig]];
+            if ($optionConnectionConfig) {
+                $connections = [
+                    $optionConnectionConfig => $generatorConfig->getBuildConnections()[$optionConnectionConfig]
+                ];
+            }
         } else {
             foreach ($optionConnections as $connection) {
                 [$name, $dsn, $infos] = $this->parseConnection($connection);
@@ -122,6 +125,9 @@ class MigrationMigrateCommand extends AbstractCommand
                 }
 
                 foreach ($migration->getUpSQL() as $datasource => $sql) {
+                    if (!array_key_exists($datasource, $connections)) {
+                        continue;
+                    }
                     $connection = $manager->getConnection($datasource);
                     if ($input->getOption('verbose')) {
                         $output->writeln(
