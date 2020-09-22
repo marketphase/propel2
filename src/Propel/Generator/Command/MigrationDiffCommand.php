@@ -113,7 +113,10 @@ class MigrationDiffCommand extends AbstractCommand
         $totalNbTables = 0;
         $reversedSchema = new Schema();
 
-        foreach ($manager->getDatabases() as $appDatabase) {
+        foreach ($manager->getDatabases() as $sqlSource => $appDatabase) {
+            if (!array_key_exists($sqlSource, $connections)) {
+                continue;
+            }
             $name = $appDatabase->getName();
             $params = $connections[$name] ?? [];
             if (!$params) {
