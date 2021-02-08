@@ -1441,6 +1441,22 @@ class Criteria
     }
 
     /**
+     * Remove select column.
+     *
+     * @param string $name Name of the select column.
+     *
+     * @return $this Modified Criteria object (for fluent API)
+     */
+    public function removeSelectColumn($name)
+    {
+        while (false !== ($key = array_search($name, $this->selectColumns, true))) {
+            unset($this->selectColumns[$key]);
+        }
+
+        return $this;
+    }
+
+    /**
      * Set the query comment, that appears after the first verb in the SQL query
      *
      * @param string|null $comment The comment to add to the query, without comment sign
@@ -1645,7 +1661,9 @@ class Criteria
             $sb .= "\nParams: ";
             $paramstr = [];
             foreach ($params as $param) {
-                $paramstr[] = $param['table'] . '.' . $param['column'] . ' => ' . var_export($param['value'], true);
+                $paramstr[] = (isset($param['table']) ? $param['table'] . '.' : '')
+                    . ($param['column'] ?? '')
+                    . (isset($param['value']) ? ' => ' . var_export($param['value'], true) : '');
             }
             $sb .= implode(', ', $paramstr);
         } catch (Exception $exc) {
