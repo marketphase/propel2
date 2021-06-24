@@ -17,6 +17,8 @@ use Propel\Runtime\ActiveQuery\Criterion\InCriterion;
 use Propel\Runtime\ActiveQuery\Criterion\LikeCriterion;
 use Propel\Runtime\ActiveQuery\Criterion\RawCriterion;
 use Propel\Runtime\Connection\ConnectionInterface;
+use Propel\Runtime\Connection\ConnectionWrapper;
+use Propel\Runtime\Connection\StatementWrapper;
 use Propel\Runtime\Exception\LogicException;
 use Propel\Runtime\Exception\PropelException;
 use Propel\Runtime\Propel;
@@ -255,7 +257,7 @@ class Criteria
     /**
      * Default operator for combination of criterions
      *
-     * @see addUsingOperator
+     * @see addUsingOperator()
      * @var string Criteria::LOGICAL_AND or Criteria::LOGICAL_OR
      */
     protected $defaultCombineOperator = Criteria::LOGICAL_AND;
@@ -276,6 +278,18 @@ class Criteria
      * @var array
      */
     public $replacedColumns = [];
+
+    /**
+     * temporary property used in replaceNames
+     *
+     * @var string|null
+     */
+    protected $currentAlias;
+
+    /**
+     * @var bool
+     */
+    protected $foundMatch = false;
 
     /**
      * Creates a new instance with the default capacity which corresponds to
@@ -2169,20 +2183,16 @@ class Criteria
             }
         }
 
-        if (empty($fromClause) && $this->getPrimaryTableName()) {
-            $fromClause[] = $this->getPrimaryTableName();
-        }
-
         // tables should not exist as alias of subQuery
         if ($this->hasSelectQueries()) {
-            foreach ($fromClause as $key => $ftable) {
+            foreach ($fromClause as $index => $ftable) {
                 if (strpos($ftable, ' ') !== false) {
                     [, $tableName] = explode(' ', $ftable);
                 } else {
                     $tableName = $ftable;
                 }
                 if ($this->hasSelectQuery($tableName)) {
-                    unset($fromClause[$key]);
+                    unset($fromClause[$index]);
                 }
             }
         }
@@ -2194,6 +2204,10 @@ class Criteria
         // add subQuery to From after adding quotes
         foreach ($this->getSelectQueries() as $subQueryAlias => $subQueryCriteria) {
             $fromClause[] = '(' . $subQueryCriteria->createSelectSql($params) . ') AS ' . $subQueryAlias;
+        }
+
+        if (empty($fromClause) && $this->getPrimaryTableName()) {
+            $fromClause[] = $this->getPrimaryTableName();
         }
 
         // build from-clause
@@ -2449,40 +2463,31 @@ class Criteria
             $this->add($pk->getFullyQualifiedName(), $id);
         }
 
+        $qualifiedCols = $this->keys(); // we need table.column cols when populating values
+        $columns = []; // but just 'column' cols for the SQL
+        foreach ($qualifiedCols as $qualifiedCol) {
+            $columns[] = substr($qualifiedCol, strrpos($qualifiedCol, '.') + 1);
+        }
+        $columns = array_map([$this, 'quoteIdentifier'], $columns);
+        $columnCsv = implode(',', $columns);
+
+        $parameterIndexes = (count($columns) === 0) ? [] : range(1, count($columns));
+        $parameterPlaceholders = preg_filter('/^/', ':p', $parameterIndexes); // prefix each element with ':p'
+        $parameterPlaceholdersCsv = implode(',', $parameterPlaceholders);
+
+        $tableName = $this->quoteIdentifierTable($tableName);
+        $sql = "INSERT INTO $tableName ($columnCsv) VALUES ($parameterPlaceholdersCsv)";
+
+        $stmt = null;
+        $params = $this->buildParams($qualifiedCols);
         try {
-            $qualifiedCols = $this->keys(); // we need table.column cols when populating values
-            $columns = []; // but just 'column' cols for the SQL
-            foreach ($qualifiedCols as $qualifiedCol) {
-                $columns[] = substr($qualifiedCol, strrpos($qualifiedCol, '.') + 1);
-            }
-
-            // add identifiers
-            $columns = array_map([$this, 'quoteIdentifier'], $columns);
-            $tableName = $this->quoteIdentifierTable($tableName);
-
-            $sql = 'INSERT INTO ' . $tableName
-                . ' (' . implode(',', $columns) . ')'
-                . ' VALUES (';
-            // . substr(str_repeat("?,", count($columns)), 0, -1) .
-            for ($p = 1, $cnt = count($columns); $p <= $cnt; $p++) {
-                $sql .= ':p' . $p;
-                if ($p !== $cnt) {
-                    $sql .= ',';
-                }
-            }
-            $sql .= ')';
-
-            $params = $this->buildParams($qualifiedCols);
-
             $db->cleanupSQL($sql, $params, $this, $dbMap);
 
             $stmt = $con->prepare($sql);
             $db->bindValues($stmt, $params, $dbMap, $db);
             $stmt->execute();
         } catch (Exception $e) {
-            Propel::log($e->getMessage(), Propel::LOG_ERR);
-
-            throw new PropelException(sprintf('Unable to execute INSERT statement [%s]', $sql), 0, $e);
+            $this->handleStatementException($e, $sql, $con, $stmt);
         }
 
         // If the primary key column is auto-incremented, get the id now.
@@ -2538,8 +2543,6 @@ class Criteria
      * @param array|\Propel\Runtime\ActiveQuery\Criteria $updateValues A Criteria object containing values used in set clause.
      * @param \Propel\Runtime\Connection\ConnectionInterface $con The ConnectionInterface connection object to use.
      *
-     * @throws \Propel\Runtime\Exception\PropelException
-     *
      * @return int The number of rows affected by last update statement.
      *             For most uses there is only one update statement executed, so this number will
      *             correspond to the number of rows affected by the call to this method.
@@ -2577,6 +2580,8 @@ class Criteria
             $whereClause = [];
             $params = [];
             $stmt = null;
+            $sql = null;
+
             try {
                 $sql = 'UPDATE ';
                 $queryComment = $this->getComment();
@@ -2643,24 +2648,12 @@ class Criteria
                 }
 
                 $db->cleanupSQL($sql, $params, $updateValues, $dbMap);
-
                 $stmt = $con->prepare($sql);
-
-                // Replace ':p?' with the actual values
                 $db->bindValues($stmt, $params, $dbMap);
-
                 $stmt->execute();
-
                 $affectedRows = $stmt->rowCount();
-
-                $stmt = null; // close
             } catch (Exception $e) {
-                if ($stmt !== null) {
-                    $stmt = null; // close
-                }
-                Propel::log($e->getMessage(), Propel::LOG_ERR);
-
-                throw new PropelException(sprintf('Unable to execute UPDATE statement [%s]', $sql), 0, $e);
+                $this->handleStatementException($e, $sql, $con, $stmt);
             }
         }
 
@@ -2697,7 +2690,6 @@ class Criteria
      * @param \Propel\Runtime\Connection\ConnectionInterface|null $con
      *
      * @throws \Propel\Runtime\Exception\LogicException
-     * @throws \Propel\Runtime\Exception\PropelException
      *
      * @return \Propel\Runtime\DataFetcher\DataFetcherInterface
      */
@@ -2733,14 +2725,14 @@ class Criteria
             $this->clearSelectColumns()->addSelectColumn('COUNT(*)');
             $sql = $this->createSelectSql($params);
         }
+
+        $stmt = null;
         try {
             $stmt = $con->prepare($sql);
             $db->bindValues($stmt, $params, $dbMap);
             $stmt->execute();
         } catch (Exception $e) {
-            Propel::log($e->getMessage(), Propel::LOG_ERR);
-
-            throw new PropelException(sprintf('Unable to execute COUNT statement [%s]', $sql), 0, $e);
+            $this->handleStatementException($e, $sql, $con, $stmt);
         }
 
         return $con->getDataFetcher($stmt);
@@ -2808,6 +2800,7 @@ class Criteria
             $whereClause = [];
             $params = [];
             $stmt = null;
+            $sql = null;
             try {
                 $sql = $adapter->getDeleteFromClause($this, $tableName);
 
@@ -2825,9 +2818,7 @@ class Criteria
                 $stmt->execute();
                 $affectedRows = $stmt->rowCount();
             } catch (Exception $e) {
-                Propel::log($e->getMessage(), Propel::LOG_ERR);
-
-                throw new PropelException(sprintf('Unable to execute DELETE statement [%s]', $sql), 0, $e);
+                $this->handleStatementException($e, $sql, $con, $stmt);
             }
         }
 
@@ -2838,8 +2829,6 @@ class Criteria
      * Builds, binds and executes a SELECT query based on the current object.
      *
      * @param \Propel\Runtime\Connection\ConnectionInterface|null $con A connection object
-     *
-     * @throws \Propel\Runtime\Exception\PropelException
      *
      * @return \Propel\Runtime\DataFetcher\DataFetcherInterface A dataFetcher using the connection, ready to be fetched
      */
@@ -2853,20 +2842,58 @@ class Criteria
 
         $params = [];
         $sql = $this->createSelectSql($params);
+        $stmt = null;
         try {
             $stmt = $con->prepare($sql);
             $db->bindValues($stmt, $params, $dbMap);
             $stmt->execute();
         } catch (Exception $e) {
-            if (isset($stmt)) {
-                $stmt = null; // close
-            }
-            Propel::log($e->getMessage(), Propel::LOG_ERR);
-
-            throw new PropelException(sprintf('Unable to execute SELECT statement [%s]', $sql), null, $e);
+            $this->handleStatementException($e, $sql, $con, $stmt);
         }
 
         return $con->getDataFetcher($stmt);
+    }
+
+    /**
+     * Logs an exception and adds the complete SQL statement to the exception.
+     *
+     * @param \Exception $e The initial exception.
+     * @param string|null $sql The SQL statement which triggered the exception.
+     * @param \Propel\Runtime\Connection\ConnectionInterface|null $con Used to determine if debug mode is enabled. In debug mode, exception messages
+     *                                  are more verbose, but might unveil sensitive data.
+     * @param \Propel\Runtime\Connection\StatementInterface|\PDOStatement|null $stmt The prepared statement.
+     *
+     * @throws \Propel\Runtime\Exception\PropelException
+     *
+     * @return void
+     */
+    protected function handleStatementException(Exception $e, ?string $sql, ?ConnectionInterface $con = null, $stmt = null): void
+    {
+        $internalMessage = $e->getMessage();
+        Propel::log($internalMessage, Propel::LOG_ERR);
+
+        $isDebugMode = $this->connectionIsInDebugMode($con);
+        if ($isDebugMode && $stmt instanceof StatementWrapper) {
+            $sql = $stmt->getExecutedQueryString();
+        }
+        $publicMessage = "Unable to execute statement [$sql]";
+        if ($isDebugMode) {
+            $publicMessage .= "\nReason: [$internalMessage]";
+        }
+
+        throw new PropelException($publicMessage, 0, $e);
+    }
+
+    /**
+     * Check if the connection has debug mode enabled
+     *
+     * @param \Propel\Runtime\Connection\ConnectionInterface|null $con
+     *
+     * @return bool
+     */
+    protected function connectionIsInDebugMode(?ConnectionInterface $con): bool
+    {
+        return ($con instanceof ConnectionWrapper && $con->useDebug);
     }
 
     // Fluid operators

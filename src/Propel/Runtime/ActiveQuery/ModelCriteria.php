@@ -16,6 +16,7 @@ use Propel\Runtime\ActiveQuery\Criterion\AbstractCriterion;
 use Propel\Runtime\ActiveQuery\Criterion\BasicModelCriterion;
 use Propel\Runtime\ActiveQuery\Criterion\BinaryModelCriterion;
 use Propel\Runtime\ActiveQuery\Criterion\CustomCriterion;
+use Propel\Runtime\ActiveQuery\Criterion\ExistsCriterion;
 use Propel\Runtime\ActiveQuery\Criterion\InModelCriterion;
 use Propel\Runtime\ActiveQuery\Criterion\LikeModelCriterion;
 use Propel\Runtime\ActiveQuery\Criterion\RawCriterion;
@@ -29,6 +30,7 @@ use Propel\Runtime\Exception\ClassNotFoundException;
 use Propel\Runtime\Exception\PropelException;
 use Propel\Runtime\Exception\RuntimeException;
 use Propel\Runtime\Exception\UnexpectedValueException;
+use Propel\Runtime\Formatter\SimpleArrayFormatter;
 use Propel\Runtime\Map\ColumnMap;
 use Propel\Runtime\Map\RelationMap;
 use Propel\Runtime\Map\TableMap;
@@ -58,11 +60,6 @@ class ModelCriteria extends BaseModelCriteria
     public const FORMAT_ON_DEMAND = '\Propel\Runtime\Formatter\OnDemandFormatter';
 
     /**
-     * @var bool
-     */
-    protected $useAliasInSQL = false;
-
-    /**
      * @var \Propel\Runtime\ActiveQuery\ModelCriteria|null
      */
     protected $primaryCriteria;
@@ -86,30 +83,19 @@ class ModelCriteria extends BaseModelCriteria
      */
     protected $isKeepQuery = true;
 
-    // this is for the select method
-    /**
-     * @var string|array|null
-     */
-    protected $select;
-
-    /**
-     * temporary property used in replaceNames
-     *
-     * @var string|null
-     */
-    protected $currentAlias;
-
-    /**
-     * @var bool
-     */
-    protected $foundMatch = false;
-
     /**
      * Used to memorize whether we added self-select columns before.
      *
      * @var bool
      */
     protected $isSelfSelected = false;
+
+    /**
+     * Indicates that this query is wrapped in an EXISTS-statement
+     *
+     * @var bool
+     */
+    protected $isExistsQuery = false;
 
     /**
      * Adds a condition on a column based on a pseudo SQL clause
@@ -219,6 +205,44 @@ class ModelCriteria extends BaseModelCriteria
         $this->addUsingOperator($criterion, null, null);
 
         return $this;
+    }
+
+    /**
+     * Adds an EXISTS clause with a custom query object.
+     *
+     * Note that filter conditions linking data from the outer query with data from the inner
+     * query are not inferred and have to be added manually. If a relationship exists between
+     * outer and inner table, {@link ModelCriteria::useExistsQuery()} can be used to infer filter
+     * automatically..
+     *
+     * @example MyOuterQuery::create()->whereExists(MyDataQuery::create()->where('MyData.MyField = MyOuter.MyField'))
+     *
+     * @phpstan-param ExistsCriterion::TYPE_* $type
+     *
+     * @see ModelCriteria::useExistsQuery() can be used
+     *
+     * @param \Propel\Runtime\ActiveQuery\ModelCriteria $existsQueryCriteria the query object used in the EXISTS statement
+     * @param string $type Either ExistsCriterion::TYPE_EXISTS or ExistsCriterion::TYPE_NOT_EXISTS. Defaults to EXISTS
+     *
+     * @return \Propel\Runtime\ActiveQuery\ModelCriteria*
+     */
+    public function whereExists($existsQueryCriteria, string $type = ExistsCriterion::TYPE_EXISTS)
+    {
+        $criterion = new ExistsCriterion($this, $existsQueryCriteria, $type);
+
+        return $this->addUsingOperator($criterion);
+    }
+
+    /**
+     * Negation of {@link ModelCriteria::whereExists()}
+     *
+     * @param \Propel\Runtime\ActiveQuery\ModelCriteria $existsQueryCriteria
+     *
+     * @return \Propel\Runtime\ActiveQuery\ModelCriteria
+     */
+    public function whereNotExists($existsQueryCriteria)
+    {
+        return $this->whereExists($existsQueryCriteria, ExistsCriterion::TYPE_NOT_EXISTS);
     }
 
     /**
@@ -440,15 +464,34 @@ class ModelCriteria extends BaseModelCriteria
         if (empty($columnArray)) {
             throw new PropelException('You must ask for at least one column');
         }
+        $this->isSelfSelected = true;
+        if ($this->formatter === null) {
+            $this->setFormatter(SimpleArrayFormatter::class);
+        }
 
         if ($columnArray === '*') {
             $columnArray = [];
-            foreach (call_user_func([$this->modelTableMapName, 'getFieldNames'], TableMap::TYPE_PHPNAME) as $column) {
-                $columnArray[] = $this->modelName . '.' . $column;
+            foreach ($this->getTableMap()->getColumns() as $columnMap) {
+                $columnArray[] = $this->modelName . '.' . $columnMap->getPhpName();
             }
         }
+        if (!is_array($columnArray)) {
+            $columnArray = [$columnArray];
+        }
 
-        $this->select = $columnArray;
+        $this->selectColumns = [];
+
+        foreach ($columnArray as $columnName) {
+            if (array_key_exists($columnName, $this->asColumns)) {
+                continue;
+            }
+            [$columnMap, $realColumnName] = $this->getColumnFromName($columnName);
+            if ($realColumnName === null) {
+                throw new PropelException("Cannot find selected column '$columnName'");
+            }
+            // always put quotes around the columnName to be safe, we strip them in the formatter
+            $this->addAsColumn('"' . $columnName . '"', $realColumnName);
+        }
 
         return $this;
     }
@@ -456,13 +499,15 @@ class ModelCriteria extends BaseModelCriteria
     /**
      * Retrieves the columns defined by a previous call to select().
      *
+     * @deprecated Not needed anymore, selected columns are part of {@link Criteria::$asColumns}
+     *
      * @see select()
      *
      * @return array|string A list of column names (e.g. array('Title', 'Category.Name', 'c.Content')) or a single column name (e.g. 'Name')
      */
     public function getSelect()
     {
-        return $this->select;
+        return array_values($this->asColumns);
     }
 
     /**
@@ -525,7 +570,7 @@ class ModelCriteria extends BaseModelCriteria
             $tableMap = $this->getTableMap();
         } else {
             [$leftName, $relationName] = explode('.', $fullName);
-            $shortLeftName = self::getShortName($leftName);
+            $shortLeftName = static::getShortName($leftName);
             // find the TableMap for the left table using the $leftName
             if ($leftName === $this->getModelAliasOrName() || $leftName === $this->getModelShortName()) {
                 $previousJoin = $this->getPreviousJoin();
@@ -819,6 +864,10 @@ class ModelCriteria extends BaseModelCriteria
      */
     public function endUse()
     {
+        if ($this->isExistsQuery) {
+            return $this->getPrimaryCriteria();
+        }
+
         if (isset($this->aliases[$this->modelAlias])) {
             $this->removeAlias($this->modelAlias);
         }
@@ -827,6 +876,52 @@ class ModelCriteria extends BaseModelCriteria
         $primaryCriteria->mergeWith($this);
 
         return $primaryCriteria;
+    }
+
+    /**
+     * Adds and returns an internal query to be used in an EXISTS-clause.
+     *
+     * @phpstan-param ExistsCriterion::TYPE_* $type
+     *
+     * @param string $relationName name of the relation
+     * @param string|null $modelAlias sets an alias for the nested query
+     * @param string|null $queryClass allows to use a custom query class for the exists query, like ExtendedBookQuery::class
+     * @param string $type Either ExistsCriterion::TYPE_EXISTS or ExistsCriterion::TYPE_NOT_EXISTS. Defaults to EXISTS
+     *
+     * @return \Propel\Runtime\ActiveQuery\ModelCriteria
+     */
+    public function useExistsQuery(string $relationName, ?string $modelAlias = null, ?string $queryClass = null, string $type = ExistsCriterion::TYPE_EXISTS)
+    {
+        $relationMap = $this->getTableMap()->getRelation($relationName);
+        $className = $relationMap->getRightTable()->getClassName();
+
+        $queryInExists = ($queryClass === null) ? PropelQuery::from($className) : new $queryClass();
+        $queryInExists->isExistsQuery = true;
+        $queryInExists->primaryCriteria = $this;
+        if ($modelAlias !== null) {
+            $queryInExists->setModelAlias($modelAlias, true);
+        }
+
+        $criterion = new ExistsCriterion($this, $queryInExists, $type, $relationMap);
+        $this->addUsingOperator($criterion);
+
+        return $queryInExists;
+    }
+
+    /**
+     * Use NOT EXISTS rather than EXISTS.
+     *
+     * @see ModelCriteria::useExistsQuery()
+     *
+     * @param string $relationName
+     * @param string|null $modelAlias sets an alias for the nested query
+     * @param string|null $queryClass allows to use a custom query class for the exists query, like ExtendedBookQuery::class
+     *
+     * @return \Propel\Runtime\ActiveQuery\ModelCriteria
+     */
+    public function useNotExistsQuery(string $relationName, ?string $modelAlias = null, ?string $queryClass = null)
+    {
+        return $this->useExistsQuery($relationName, $modelAlias, $queryClass, ExistsCriterion::TYPE_NOT_EXISTS);
     }
 
     /**
@@ -878,7 +973,6 @@ class ModelCriteria extends BaseModelCriteria
         $this->with = [];
         $this->primaryCriteria = null;
         $this->formatter = null;
-        $this->select = null;
 
         return $this;
     }
@@ -1496,11 +1590,6 @@ class ModelCriteria extends BaseModelCriteria
         $criteria->setDbName($this->getDbName()); // Set the correct dbName
         $criteria->clearOrderByColumns(); // ORDER BY won't ever affect the count
 
-        // We need to set the primary table name, since in the case that there are no WHERE columns
-        // it will be impossible for the createSelectSql() method to determine which
-        // tables go into the FROM clause.
-        $criteria->setPrimaryTableName(constant($this->modelTableMapName . '::TABLE_NAME'));
-
         $dataFetcher = $criteria->doCount($con);
         $row = $dataFetcher->fetch();
         if ($row) {
@@ -1520,8 +1609,6 @@ class ModelCriteria extends BaseModelCriteria
      */
     public function doCount(?ConnectionInterface $con = null)
     {
-        $this->configureSelectColumns();
-
         // check that the columns of the main class are already added (if this is the primary ModelCriteria)
         if (!$this->hasSelectClause() && !$this->getPrimaryCriteria()) {
             $this->addSelfSelectColumns();
@@ -1550,11 +1637,6 @@ class ModelCriteria extends BaseModelCriteria
         $criteria->clearSelectColumns(); // We are not retrieving data
         $criteria->addSelectColumn('1');
         $criteria->limit(1);
-
-        // We need to set the primary table name, since in the case that there are no WHERE columns
-        // it will be impossible for the createSelectSql() method to determine which
-        // tables go into the FROM clause.
-        $criteria->setPrimaryTableName(constant($this->modelTableMapName . '::TABLE_NAME'));
 
         $dataFetcher = $criteria->doSelect($con);
         $exists = (bool)$dataFetcher->fetchColumn(0);
@@ -1720,14 +1802,14 @@ class ModelCriteria extends BaseModelCriteria
             throw new RuntimeException('Delete does not support join');
         }
 
-        $this->setPrimaryTableName(constant($this->modelTableMapName . '::TABLE_NAME'));
         $tableName = $this->getPrimaryTableName();
 
         $affectedRows = 0; // initialize this in case the next loop has no iterations.
 
+        $tableName = $this->quoteIdentifierTable($tableName);
+        $sql = 'DELETE FROM ' . $tableName;
+
         try {
-            $tableName = $this->quoteIdentifierTable($tableName);
-            $sql = 'DELETE FROM ' . $tableName;
             $stmt = $con->prepare($sql);
 
             $stmt->execute();
@@ -1822,9 +1904,6 @@ class ModelCriteria extends BaseModelCriteria
         }
 
         $criteria = $this->isKeepQuery() ? clone $this : $this;
-        if ($this->modelTableMapName) {
-            $criteria->setPrimaryTableName(constant($this->modelTableMapName . '::TABLE_NAME'));
-        }
 
         return $con->transaction(function () use ($con, $values, $criteria, $forceIndividualSaves) {
             $affectedRows = $criteria->basePreUpdate($values, $con, $forceIndividualSaves);
@@ -2013,23 +2092,24 @@ class ModelCriteria extends BaseModelCriteria
         $key = $matches[0];
         [$column, $realFullColumnName] = $this->getColumnFromName($key);
 
-        if ($column instanceof ColumnMap) {
-            $this->replacedColumns[] = $column;
-            $this->foundMatch = true;
-
-            if (strpos($key, '.') !== false) {
-                [$tableName, $columnName] = explode('.', $key);
-                $realColumnName = substr($realFullColumnName, strrpos($realFullColumnName, '.') + 1);
-                if (isset($this->aliases[$tableName])) {
-                    //don't replace a alias with their real table name
-                    return $this->quoteIdentifier($tableName . '.' . $realColumnName);
-                }
-            }
-
-            return $this->quoteIdentifier($realFullColumnName);
+        if (!$column instanceof ColumnMap) {
+            return $this->quoteIdentifier($key);
         }
 
-        return $this->quoteIdentifier($key);
+        $this->replacedColumns[] = $column;
+        $this->foundMatch = true;
+
+        if (strpos($key, '.') !== false) {
+            [$tableName, $columnName] = explode('.', $key);
+            if (isset($this->aliases[$tableName])) {
+                //don't replace a alias with their real table name
+                $realColumnName = substr($realFullColumnName, strrpos($realFullColumnName, '.') + 1);
+
+                return $this->quoteIdentifier($tableName . '.' . $realColumnName);
+            }
+        }
+
+        return $this->quoteIdentifier($realFullColumnName);
     }
 
     /**
@@ -2044,7 +2124,7 @@ class ModelCriteria extends BaseModelCriteria
      *   => array($authorFirstNameColumnMap, 'a.first_name')
      * </code>
      *
-     * @param string $phpName String representing the column name in a pseudo SQL clause, e.g. 'Book.Title'
+     * @param string $columnName String representing the column name in a pseudo SQL clause, e.g. 'Book.Title'
      * @param bool $failSilently
      *
      * @throws \Propel\Runtime\ActiveQuery\Exception\UnknownColumnException
@@ -2052,16 +2132,16 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return array List($columnMap, $realColumnName)
      */
-    protected function getColumnFromName($phpName, $failSilently = true)
+    protected function getColumnFromName($columnName, $failSilently = true)
     {
-        if (strpos($phpName, '.') === false) {
+        if (strpos($columnName, '.') === false) {
             $prefix = $this->getModelAliasOrName();
         } else {
             // $prefix could be either class name or table name
-            [$prefix, $phpName] = explode('.', $phpName);
+            [$prefix, $columnName] = explode('.', $columnName);
         }
 
-        $shortClass = self::getShortName($prefix);
+        $shortClass = static::getShortName($prefix);
 
         if ($prefix === $this->getModelAliasOrName()) {
             // column of the Criteria's model
@@ -2079,7 +2159,7 @@ class ModelCriteria extends BaseModelCriteria
             // column of a relations's model
             $tableMap = $this->joins[$shortClass]->getTableMap();
         } elseif ($this->hasSelectQuery($prefix)) {
-            return $this->getColumnFromSubQuery($prefix, $phpName, $failSilently);
+            return $this->getColumnFromSubQuery($prefix, $columnName, $failSilently);
         } elseif ($modelJoin = $this->getModelJoinByTableName($prefix)) {
             $tableMap = $modelJoin->getTableMap();
         } elseif ($failSilently) {
@@ -2088,8 +2168,9 @@ class ModelCriteria extends BaseModelCriteria
             throw new UnknownModelException(sprintf('Unknown model, alias or table "%s"', $prefix));
         }
 
-        if ($tableMap->hasColumnByPhpName($phpName)) {
-            $column = $tableMap->getColumnByPhpName($phpName);
+        $column = $tableMap->findColumnByName($columnName);
+
+        if ($column !== null) {
             if (isset($this->aliases[$prefix])) {
                 $this->currentAlias = $prefix;
                 $realColumnName = $prefix . '.' . $column->getName();
@@ -2098,18 +2179,13 @@ class ModelCriteria extends BaseModelCriteria
             }
 
             return [$column, $realColumnName];
-        } elseif ($tableMap->hasColumn($phpName)) {
-            $column = $tableMap->getColumn($phpName);
-            $realColumnName = $column->getFullyQualifiedName();
-
-            return [$column, $realColumnName];
-        } elseif (isset($this->asColumns[$phpName])) {
+        } elseif (isset($this->asColumns[$columnName])) {
             // aliased column
-            return [null, $phpName];
+            return [null, $columnName];
         } elseif ($failSilently) {
             return [null, null];
         } else {
-            throw new UnknownColumnException(sprintf('Unknown column "%s" on model, alias or table "%s"', $phpName, $prefix));
+            throw new UnknownColumnException(sprintf('Unknown column "%s" on model, alias or table "%s"', $columnName, $prefix));
         }
     }
 
@@ -2144,46 +2220,17 @@ class ModelCriteria extends BaseModelCriteria
             $con = Propel::getServiceContainer()->getReadConnection($this->getDbName());
         }
 
-        $this->configureSelectColumns();
-
         return parent::doSelect($con);
     }
 
     /**
+     * @deprecated This method was used to add columns from {@link select()} during query generation, but that is handled
+     * right away now.
+     *
      * @return void
      */
     public function configureSelectColumns()
     {
-        if ($this->select === null) {
-            // leave early
-            return;
-        }
-
-        // select() needs the PropelSimpleArrayFormatter if no formatter given
-        if ($this->formatter === null) {
-            $this->setFormatter('\Propel\Runtime\Formatter\SimpleArrayFormatter');
-        }
-
-        // clear only the selectColumns, clearSelectColumns() clears asColumns too
-        $this->selectColumns = [];
-
-        // We need to set the primary table name, since in the case that there are no WHERE columns
-        // it will be impossible for the createSelectSql() method to determine which
-        // tables go into the FROM clause.
-        if (!$this->selectQueries) {
-            $this->setPrimaryTableName(constant($this->modelTableMapName . '::TABLE_NAME'));
-        }
-
-        // Add requested columns which are not withColumns
-        $columnNames = is_array($this->select) ? $this->select : [$this->select];
-        foreach ($columnNames as $columnName) {
-            // check if the column was added by a withColumn, if not add it
-            if (!array_key_exists($columnName, $this->getAsColumns())) {
-                $column = $this->getColumnFromName($columnName);
-                // always put quotes around the columnName to be safe, we strip them in the formatter
-                $this->addAsColumn('"' . $columnName . '"', $column[1]);
-            }
-        }
     }
 
     /**
@@ -2204,8 +2251,9 @@ class ModelCriteria extends BaseModelCriteria
         if ($tableMap->hasColumnByPhpName($phpName)) {
             $column = $tableMap->getColumnByPhpName($phpName);
             $realColumnName = $class . '.' . $column->getName();
+            $this->currentAlias = $class;
 
-            return [$column, $realColumnName];
+            return [null, $realColumnName];
         }
         if (isset($subQueryCriteria->asColumns[$phpName])) {
             // aliased column
@@ -2235,15 +2283,10 @@ class ModelCriteria extends BaseModelCriteria
         if (!$this->getTableMap()->hasColumnByPhpName($columnName)) {
             throw new UnknownColumnException('Unknown column ' . $columnName . ' in model ' . $this->modelName);
         }
+        $tableName = $this->getTableNameInQuery();
+        $columnName = $this->getTableMap()->getColumnByPhpName($columnName)->getName();
 
-        if ($this->useAliasInSQL) {
-            return $this->modelAlias . '.' . $this->getTableMap()->getColumnByPhpName($columnName)->getName();
-        }
-
-        return $this
-            ->getTableMap()
-            ->getColumnByPhpName($columnName)
-            ->getFullyQualifiedName();
+        return "$tableName.$columnName";
     }
 
     /**
@@ -2262,20 +2305,6 @@ class ModelCriteria extends BaseModelCriteria
         }
 
         return $colName;
-    }
-
-    /**
-     * Return the short ClassName for class with namespace
-     *
-     * @param string $fullyQualifiedClassName The fully qualified class name
-     *
-     * @return string The short class name
-     */
-    public static function getShortName($fullyQualifiedClassName)
-    {
-        $namespaceParts = explode('\\', $fullyQualifiedClassName);
-
-        return array_pop($namespaceParts);
     }
 
     /**

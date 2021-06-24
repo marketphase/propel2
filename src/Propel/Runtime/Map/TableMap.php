@@ -9,6 +9,8 @@
 namespace Propel\Runtime\Map;
 
 use Propel\Runtime\ActiveQuery\Criteria;
+use Propel\Runtime\Collection\Collection;
+use Propel\Runtime\Collection\ObjectCollection;
 use Propel\Runtime\Map\Exception\ColumnNotFoundException;
 use Propel\Runtime\Map\Exception\RelationNotFoundException;
 use Propel\Runtime\Propel;
@@ -293,12 +295,12 @@ class TableMap
      */
     public function getCollectionClassName()
     {
-        $collectionClass = $this->getClassName() . 'Collection';
-        if (class_exists($collectionClass)) {
-            return $collectionClass;
+        $collectionClassName = $this->getClassName() . 'Collection';
+        if (class_exists($collectionClassName) && is_subclass_of($collectionClassName, Collection::class)) {
+            return $collectionClassName;
         }
 
-        return '\Propel\Runtime\Collection\ObjectCollection';
+        return ObjectCollection::class;
     }
 
     /**
@@ -552,6 +554,28 @@ class TableMap
         }
 
         return $this->columnsByPhpName[$phpName];
+    }
+
+    /**
+     * Tries to find a column by name.
+     *
+     * @param string $name
+     *
+     * @return \Propel\Runtime\Map\ColumnMap|null
+     */
+    public function findColumnByName(string $name): ?ColumnMap
+    {
+        if (isset($this->columnsByPhpName[$name])) {
+            return $this->getColumnByPhpName($name);
+        }
+        if ($this->hasColumn($name, false)) {
+            return $this->getColumn($name, false);
+        }
+        if ($this->hasColumn($name, true)) {
+            return $this->getColumn($name, true);
+        }
+
+        return null;
     }
 
     /**

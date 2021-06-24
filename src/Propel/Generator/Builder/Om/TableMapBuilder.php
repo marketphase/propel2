@@ -173,8 +173,6 @@ class " . $this->getUnqualifiedClassName() . " extends TableMap
             $this->addGetTableMap($script);
         }
 
-        $this->addBuildTableMap($script);
-
         $this->addDoDelete($script);
         $this->addDoDeleteAll($script);
 
@@ -453,55 +451,38 @@ class " . $this->getUnqualifiedClassName() . " extends TableMap
      */
     protected function addNormalizedColumnNameMap(&$script): void
     {
+        $table = $this->getTable();
+        $tableColumns = $table->getColumns();
+
+        $arrayString = '';
+        foreach ($tableColumns as $column) {
+            $variants = [
+                $column->getPhpName(),                                    // ColumnName => COLUMN_NAME
+                $table->getPhpName() . '.' . $column->getPhpName(),       // TableName.ColumnName => COLUMN_NAME
+                $column->getCamelCaseName(),                              // columnName => COLUMN_NAME
+                $table->getCamelCaseName() . '.' . $column->getCamelCaseName(), // tableName.columnName => COLUMN_NAME
+                $this->getColumnConstant($column, $this->getTableMapClass()),   // TableNameTableMap::COL_COLUMN_NAME => COLUMN_NAME
+                $column->getConstantName(),                               // COL_COLUMN_NAME => COLUMN_NAME
+                $column->getName(),                                       // column_name => COLUMN_NAME
+                $table->getName() . '.' . $column->getName(),             // table_name.column_name => COLUMN_NAME
+            ];
+
+            $variants = array_unique($variants);
+
+            $normalizedName = strtoupper($column->getName());
+            array_walk($variants, static function ($variant) use (&$arrayString, $normalizedName) {
+                $arrayString .= PHP_EOL . "        '{$variant}' => '{$normalizedName}',";
+            });
+        }
+
         $script .= '
     /**
      * Holds a list of column names and their normalized version.
      *
      * @var string[]
      */
-    protected $normalizedColumnNameMap = [' . PHP_EOL;
-
-        $table = $this->getTable();
-        $tableColumns = $table->getColumns();
-
-        foreach ($tableColumns as $num => $column) {
-            $normalizedName = strtoupper($column->getName());
-
-            // ColumnName => COLUMN_NAME
-            $script .= '
-        \'' . $column->getPhpName() . '\' => \'' . $normalizedName . '\',';
-
-            // TableName.ColumnName => COLUMN_NAME
-            $script .= '
-        \'' . $table->getPhpName() . '.' . $column->getPhpName() . '\' => \'' . $normalizedName . '\',';
-
-            // columnName => COLUMN_NAME
-            $script .= '
-        \'' . $column->getCamelCaseName() . '\' => \'' . $normalizedName . '\',';
-
-            // tableName.columnName => COLUMN_NAME
-            $script .= '
-        \'' . $table->getCamelCaseName() . '.' . $column->getCamelCaseName() . '\' => \'' . $normalizedName . '\',';
-
-            // TableNameTableMap::COL_COLUMN_NAME => COLUMN_NAME
-            $script .= '
-        \'' . $this->getColumnConstant($column, $this->getTableMapClass()) . '\' => \'' . $normalizedName . '\',';
-
-            // COL_COLUMN_NAME => COLUMN_NAME
-            $script .= '
-        \'' . $column->getConstantName() . '\' => \'' . $normalizedName . '\',';
-
-            // column_name => COLUMN_NAME
-            $script .= '
-        \'' . $column->getName() . '\' => \'' . $normalizedName . '\',';
-
-            // table_name.column_name => COLUMN_NAME
-            $script .= '
-        \'' . $table->getName() . '.' . $column->getName() . '\' => \'' . $normalizedName . '\',';
-        }
-
-        $script .= '
-    ];' . PHP_EOL;
+    protected $normalizedColumnNameMap = [' . $arrayString . PHP_EOL
+            . '    ];' . PHP_EOL;
     }
 
     /**
@@ -513,37 +494,11 @@ class " . $this->getUnqualifiedClassName() . " extends TableMap
      */
     protected function addClassClose(&$script)
     {
+        $unqualifiedClassName = $this->getUnqualifiedClassName();
         $script .= "
-} // " . $this->getUnqualifiedClassName() . "
-// This is the static code needed to register the TableMap for this table with the main Propel class.
-//
-" . $this->getUnqualifiedClassName() . "::buildTableMap();
+} // $unqualifiedClassName
 ";
         $this->applyBehaviorModifier('tableMapFilter', $script, '');
-    }
-
-    /**
-     * Adds the buildTableMap() method.
-     *
-     * @param string $script The script will be modified in this method.
-     *
-     * @return void
-     */
-    protected function addBuildTableMap(&$script)
-    {
-        $this->declareClassFromBuilder($this->getTableMapBuilder());
-        $script .= "
-    /**
-     * Add a TableMap instance to the database for this tableMap class.
-     */
-    public static function buildTableMap()
-    {
-        \$dbMap = Propel::getServiceContainer()->getDatabaseMap(" . $this->getTableMapClass() . "::DATABASE_NAME);
-        if (!\$dbMap->hasTable(" . $this->getTableMapClass() . "::TABLE_NAME)) {
-            \$dbMap->addTableObject(new " . $this->getTableMapClass() . "());
-        }
-    }
-";
     }
 
     /**
@@ -717,8 +672,19 @@ class " . $this->getUnqualifiedClassName() . " extends TableMap
     protected function addGetBehaviors(&$script)
     {
         $behaviors = $this->getTable()->getBehaviors();
-        if ($behaviors) {
-            $script .= "
+        if (!$behaviors) {
+            return;
+        }
+
+        $stringifiedBehaviors = [];
+        foreach ($behaviors as $behavior) {
+            $id = $behavior->getId();
+            $params = $this->stringify($behavior->getParameters());
+            $stringifiedBehaviors[] = "'$id' => $params,";
+        }
+        $itemsString = implode(PHP_EOL . '            ', $stringifiedBehaviors);
+
+        $script .= "
     /**
      *
      * Gets the list of behaviors registered for this table
@@ -727,28 +693,33 @@ class " . $this->getUnqualifiedClassName() . " extends TableMap
      */
     public function getBehaviors()
     {
-        return array(";
-            foreach ($behaviors as $behavior) {
-                $script .= "
-            '{$behavior->getId()}' => array(";
-                foreach ($behavior->getParameters() as $key => $value) {
-                    $script .= "'$key' => ";
-                    if (is_array($value)) {
-                        $string = var_export($value, true);
-                        $string = str_replace("\n", '', $string);
-                        $string = str_replace('  ', '', $string);
-                        $script .= $string . ', ';
-                    } else {
-                        $script .= "'$value', ";
-                    }
-                }
-                $script .= '),';
-            }
-            $script .= "
+        return array(
+            $itemsString
         );
     } // getBehaviors()
 ";
+    }
+
+    /**
+     * @param bool|int|float|string|array|null $value
+     *
+     * @return string
+     */
+    protected function stringify($value): string
+    {
+        if (!is_array($value)) {
+            return var_export($value, true);
         }
+
+        $items = [];
+        foreach ($value as $key => $value) {
+            $keyString = var_export($key, true);
+            $valString = $this->stringify($value);
+            $items[] = "$keyString => $valString";
+        }
+        $itemsCsv = implode(', ', $items);
+
+        return "[$itemsCsv]";
     }
 
     /**
@@ -975,7 +946,6 @@ class " . $this->getUnqualifiedClassName() . " extends TableMap
             \$pks = [];
             ";
 
-            $pks = [];
             foreach ($table->getColumns() as $col) {
                 if (!$col->isLazyLoad()) {
                     if ($col->isPrimaryKey()) {
@@ -1142,16 +1112,21 @@ class " . $this->getUnqualifiedClassName() . " extends TableMap
      */
     protected function addGetOMClass_NoInheritance_Abstract(&$script)
     {
+        $objectClassName = $this->getObjectClassName();
+
         $script .= "
     /**
      * The class that the tableMap will make instances of.
      *
      * This method must be overridden by the stub subclass, because
-     * " . $this->getObjectClassName() . " is declared abstract in the schema.
+     * $objectClassName is declared abstract in the schema.
      *
      * @param boolean \$withPrefix
      */
-    abstract public static function getOMClass(\$withPrefix = true);
+    public static function getOMClass(\$withPrefix = true)
+    {
+        throw new PropelException('$objectClassName is declared abstract, it cannot be instantiated.');
+    }
 ";
     }
 

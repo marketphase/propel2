@@ -13,6 +13,7 @@ use Propel\Generator\Model\CrossForeignKeys;
 use Propel\Generator\Model\ForeignKey;
 use Propel\Generator\Model\PropelTypes;
 use Propel\Generator\Model\Table;
+use Propel\Runtime\ActiveQuery\Criterion\ExistsCriterion;
 
 /**
  * Generates a base Query class for user object model (OM).
@@ -66,8 +67,16 @@ class QueryBuilder extends AbstractOMBuilder
     public function getParentClass()
     {
         $parentClass = $this->getBehaviorContent('parentClass');
+        if ($parentClass) {
+            return $parentClass;
+        }
 
-        return $parentClass === null ? ($this->getTable()->getBaseQueryClass() != '' ? $this->getTable()->getBaseQueryClass() : 'ModelCriteria') : $parentClass;
+        $baseQueryClass = $this->getTable()->getBaseQueryClass();
+        if ($baseQueryClass) {
+            return $baseQueryClass;
+        }
+
+        return 'ModelCriteria';
     }
 
     /**
@@ -626,10 +635,9 @@ abstract class " . $this->getUnqualifiedClassName() . ' extends ' . $parentClass
             return null;
         }";
         if ($table->hasCompositePrimaryKey()) {
-            $pks = [];
-            foreach ($table->getPrimaryKey() as $index => $column) {
-                $pks[] = "\$key[$index]";
-            }
+            $numberOfPks = count($table->getPrimaryKey());
+            $pkIndexes = range(0, $numberOfPks - 1);
+            $pks = preg_filter('/(\d+)/', '$key[${1}]', $pkIndexes); // put ids into "$key[]"
         } else {
             $pks = '$key';
         }
@@ -643,7 +651,7 @@ abstract class " . $this->getUnqualifiedClassName() . ' extends ' . $parentClass
         \$this->basePreSelect(\$con);
 
         if (
-            \$this->formatter || \$this->modelAlias || \$this->with || \$this->select
+            \$this->formatter || \$this->modelAlias || \$this->with
             || \$this->selectColumns || \$this->asColumns || \$this->selectModifiers
             || \$this->map || \$this->having || \$this->joins
         ) {
@@ -671,6 +679,19 @@ abstract class " . $this->getUnqualifiedClassName() . ' extends ' . $parentClass
 
         // this method is not needed if the table has no primary key
         if (!$table->hasPrimaryKey()) {
+            return;
+        }
+
+        $usesConcreteInheritance = $table->usesConcreteInheritance();
+        if ($table->isAbstract() && !$usesConcreteInheritance) {
+            $tableName = $table->getPhpName();
+            $script .= "
+    protected function findPkSimple(\$key, ConnectionInterface \$con)
+    {
+        throw new PropelException('$tableName is declared abstract, you cannot query it.');
+    }
+";
+
             return;
         }
 
@@ -740,7 +761,7 @@ abstract class " . $this->getUnqualifiedClassName() . ' extends ' . $parentClass
         \$obj = null;
         if (\$row = \$stmt->fetch(\PDO::FETCH_NUM)) {";
 
-        if ($table->getChildrenColumn()) {
+        if ($usesConcreteInheritance) {
             $script .= "
             \$cls = {$tableMapClassName}::getOMClass(\$row, 0, false);
             /** @var $ARClassName \$obj */
@@ -1223,7 +1244,6 @@ abstract class " . $this->getUnqualifiedClassName() . ' extends ' . $parentClass
      */
     protected function addFilterByArrayCol(&$script, Column $col)
     {
-        $colPhpName = $col->getPhpName();
         $singularPhpName = $col->getPhpSingularName();
         $colName = $col->getName();
         $variableName = $col->getCamelCaseName();
@@ -1305,7 +1325,6 @@ abstract class " . $this->getUnqualifiedClassName() . ' extends ' . $parentClass
             '\Propel\Runtime\Collection\ObjectCollection',
             '\Propel\Runtime\Exception\PropelException'
         );
-        $table = $this->getTable();
         $queryClass = $this->getQueryClassName();
         $fkTable = $fk->getForeignTable();
         $fkStubObjectBuilder = $this->getNewStubObjectBuilder($fkTable);
@@ -1550,6 +1569,7 @@ abstract class " . $this->getUnqualifiedClassName() . ' extends ' . $parentClass
 
         $this->addUseRelatedQuery($script, $fkTable, $queryClass, $relationName, $joinType);
         $this->addWithRelatedQuery($script, $fkTable, $queryClass, $relationName, $joinType);
+        $this->addUseRelatedExistsQuery($script, $fkTable, $queryClass, $relationName);
     }
 
     /**
@@ -1570,6 +1590,7 @@ abstract class " . $this->getUnqualifiedClassName() . ' extends ' . $parentClass
 
         $this->addUseRelatedQuery($script, $fkTable, $queryClass, $relationName, $joinType);
         $this->addWithRelatedQuery($script, $fkTable, $queryClass, $relationName, $joinType);
+        $this->addUseRelatedExistsQuery($script, $fkTable, $queryClass, $relationName);
     }
 
     /**
@@ -1604,6 +1625,59 @@ abstract class " . $this->getUnqualifiedClassName() . ' extends ' . $parentClass
             ->useQuery(\$relationAlias ? \$relationAlias : '$relationName', '$queryClass');
     }
 ";
+    }
+
+    /**
+     * Adds a useExistsQuery and useNotExistsQuery to the object script.
+     *
+     * @param string $script The script will be modified in this method.
+     * @param \Propel\Generator\Model\Table $fkTable The target of the relation
+     * @param string $queryClass Query object class name that will be returned by the exists statement.
+     * @param string $relationName Name of the relation
+     *
+     * @return void
+     */
+    protected function addUseRelatedExistsQuery(&$script, Table $fkTable, $queryClass, $relationName)
+    {
+        $relationDescription = ($relationName === $fkTable->getPhpName()) ?
+            "relation to $relationName table" :
+            "$relationName relation to the {$fkTable->getPhpName()} table";
+
+        $notExistsType = ExistsCriterion::TYPE_NOT_EXISTS;
+        $existsType = ExistsCriterion::TYPE_EXISTS;
+
+        $script .= <<< EOT
+    /**
+     * Use the $relationDescription for an EXISTS query.
+     *
+     * @see \Propel\Runtime\ActiveQuery\ModelCriteria::useExistsQuery()
+     *
+     * @param string|null \$queryClass Allows to use a custom query class for the exists query, like ExtendedBookQuery::class
+     * @param string|null \$modelAlias sets an alias for the nested query
+     * @param string \$typeOfExists Either ExistsCriterion::TYPE_EXISTS or ExistsCriterion::TYPE_NOT_EXISTS
+     *
+     * @return $queryClass The inner query object of the EXISTS statement
+     */
+    public function use{$relationName}ExistsQuery(\$modelAlias = null, \$queryClass = null, \$typeOfExists = '$existsType')
+    {
+        return \$this->useExistsQuery('$relationName', \$modelAlias, \$queryClass, \$typeOfExists);
+    }
+
+    /**
+     * Use the $relationDescription for a NOT EXISTS query.
+     *
+     * @see use{$relationName}ExistsQuery()
+     *
+     * @param string|null \$modelAlias sets an alias for the nested query
+     * @param string|null \$queryClass Allows to use a custom query class for the exists query, like ExtendedBookQuery::class
+     *
+     * @return $queryClass The inner query object of the NOT EXISTS statement
+     */
+    public function use{$relationName}NotExistsQuery(\$modelAlias = null, \$queryClass = null)
+    {
+        return \$this->useExistsQuery('$relationName', \$modelAlias, \$queryClass, '$notExistsType');
+    }
+EOT;
     }
 
     /**
