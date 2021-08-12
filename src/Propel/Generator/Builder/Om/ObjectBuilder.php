@@ -2535,8 +2535,13 @@ abstract class " . $this->getUnqualifiedClassName() . $parentClass . ' implement
                 $fmt = $this->getTemporalFormatter($col);
                 $accessor = "\$this->$clo && \$this->{$clo}->format('$fmt')";
             }
+            $notEquals = '!==';
+            $defaultValueString = $this->getDefaultValueString($col);
+            if (strpos($defaultValueString, 'new ') === 0) {
+                $notEquals = '!='; // allow object-comparison for custom PHP types
+            }
             $script .= "
-            if ($accessor !== " . $this->getDefaultValueString($col) . ") {
+            if ($accessor $notEquals $defaultValueString) {
                 return false;
             }
 ";
@@ -3778,12 +3783,12 @@ abstract class " . $this->getUnqualifiedClassName() . $parentClass . ' implement
     {
         $pkeys = $this->getTable()->getPrimaryKey();
         if (count($pkeys) == 1) {
-            $this->addGetPrimaryKey_SinglePK($script);
+            $this->addGetPrimaryKeySinglePK($script);
         } elseif (count($pkeys) > 1) {
-            $this->addGetPrimaryKey_MultiPK($script);
+            $this->addGetPrimaryKeyMultiPK($script);
         } else {
             // no primary key -- this is deprecated, since we don't *need* this method anymore
-            $this->addGetPrimaryKey_NoPK($script);
+            $this->addGetPrimaryKeyNoPK($script);
         }
     }
 
@@ -3794,7 +3799,7 @@ abstract class " . $this->getUnqualifiedClassName() . $parentClass . ' implement
      *
      * @return void
      */
-    protected function addGetPrimaryKey_SinglePK(&$script)
+    protected function addGetPrimaryKeySinglePK(&$script)
     {
         $table = $this->getTable();
         $pkeys = $table->getPrimaryKey();
@@ -3819,7 +3824,7 @@ abstract class " . $this->getUnqualifiedClassName() . $parentClass . ' implement
      *
      * @return void
      */
-    protected function addGetPrimaryKey_MultiPK(&$script)
+    protected function addGetPrimaryKeyMultiPK(&$script)
     {
         $script .= "
     /**
@@ -3855,7 +3860,7 @@ abstract class " . $this->getUnqualifiedClassName() . $parentClass . ' implement
      *
      * @return void
      */
-    protected function addGetPrimaryKey_NoPK(&$script)
+    protected function addGetPrimaryKeyNoPK(&$script)
     {
         $script .= "
     /**
@@ -3881,12 +3886,12 @@ abstract class " . $this->getUnqualifiedClassName() . $parentClass . ' implement
     {
         $pkeys = $this->getTable()->getPrimaryKey();
         if (count($pkeys) == 1) {
-            $this->addSetPrimaryKey_SinglePK($script);
+            $this->addSetPrimaryKeySinglePK($script);
         } elseif (count($pkeys) > 1) {
-            $this->addSetPrimaryKey_MultiPK($script);
+            $this->addSetPrimaryKeyMultiPK($script);
         } else {
             // no primary key -- this is deprecated, since we don't *need* this method anymore
-            $this->addSetPrimaryKey_NoPK($script);
+            $this->addSetPrimaryKeyNoPK($script);
         }
     }
 
@@ -3897,7 +3902,7 @@ abstract class " . $this->getUnqualifiedClassName() . $parentClass . ' implement
      *
      * @return void
      */
-    protected function addSetPrimaryKey_SinglePK(&$script)
+    protected function addSetPrimaryKeySinglePK(&$script)
     {
         $pkeys = $this->getTable()->getPrimaryKey();
         $col = $pkeys[0];
@@ -3925,7 +3930,7 @@ abstract class " . $this->getUnqualifiedClassName() . $parentClass . ' implement
      *
      * @return void
      */
-    protected function addSetPrimaryKey_MultiPK(&$script)
+    protected function addSetPrimaryKeyMultiPK(&$script)
     {
         $script .= "
     /**
@@ -3959,7 +3964,7 @@ abstract class " . $this->getUnqualifiedClassName() . $parentClass . ' implement
      *
      * @return void
      */
-    protected function addSetPrimaryKey_NoPK(&$script)
+    protected function addSetPrimaryKeyNoPK(&$script)
     {
         $script .= "
     /**
