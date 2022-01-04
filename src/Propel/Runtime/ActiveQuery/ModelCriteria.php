@@ -53,9 +53,24 @@ use Propel\Runtime\Util\PropelModelPager;
  */
 class ModelCriteria extends BaseModelCriteria
 {
+    /**
+     * @var string
+     */
     public const FORMAT_STATEMENT = '\Propel\Runtime\Formatter\StatementFormatter';
+
+    /**
+     * @var string
+     */
     public const FORMAT_ARRAY = '\Propel\Runtime\Formatter\ArrayFormatter';
+
+    /**
+     * @var string
+     */
     public const FORMAT_OBJECT = '\Propel\Runtime\Formatter\ObjectFormatter';
+
+    /**
+     * @var string
+     */
     public const FORMAT_ON_DEMAND = '\Propel\Runtime\Formatter\OnDemandFormatter';
 
     /**
@@ -81,6 +96,12 @@ class ModelCriteria extends BaseModelCriteria
      * @var bool
      */
     protected $isKeepQuery = true;
+
+    // this is for the select method
+    /**
+     * @var array|string|null
+     */
+    protected $select;
 
     /**
      * Used to memorize whether we added self-select columns before.
@@ -185,9 +206,13 @@ class ModelCriteria extends BaseModelCriteria
      * $c->where(array('cond1', 'cond2'), Criteria::LOGICAL_OR);
      * </code>
      *
+     * @phpstan-param literal-string|array $clause
+     *
+     * @psalm-param literal-string|array $clause
+     *
      * @see Criteria::add()
      *
-     * @param mixed $clause A string representing the pseudo SQL clause, e.g. 'Book.AuthorId = ?'
+     * @param array|string $clause A string representing the pseudo SQL clause, e.g. 'Book.AuthorId = ?'
      *   Or an array of condition names
      * @param mixed $value A value for the condition
      * @param int|null $bindingType
@@ -219,7 +244,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @example MyOuterQuery::create()->whereExists(MyDataQuery::create()->where('MyData.MyField = MyOuter.MyField'))
      *
-     * @phpstan-param ExistsCriterion::TYPE_* $type
+     * @phpstan-param \Propel\Runtime\ActiveQuery\Criterion\ExistsCriterion::TYPE_* $type
      *
      * @see ModelCriteria::useExistsQuery() can be used
      *
@@ -466,42 +491,34 @@ class ModelCriteria extends BaseModelCriteria
         if (empty($columnArray)) {
             throw new PropelException('You must ask for at least one column');
         }
-        $this->isSelfSelected = true;
-        if ($this->formatter === null) {
-            $this->setFormatter(SimpleArrayFormatter::class);
-        }
 
         if ($columnArray === '*') {
-            $columnArray = [];
-            foreach ($this->getTableMap()->getColumns() as $columnMap) {
-                $columnArray[] = $this->modelName . '.' . $columnMap->getPhpName();
-            }
+            $columnArray = $this->resolveSelectAll();
         }
         if (!is_array($columnArray)) {
             $columnArray = [$columnArray];
         }
-
-        $this->selectColumns = [];
-
-        foreach ($columnArray as $columnName) {
-            if (array_key_exists($columnName, $this->asColumns)) {
-                continue;
-            }
-            [$columnMap, $realColumnName] = $this->getColumnFromName($columnName);
-            if ($realColumnName === null) {
-                throw new PropelException("Cannot find selected column '$columnName'");
-            }
-            // always put quotes around the columnName to be safe, we strip them in the formatter
-            $this->addAsColumn('"' . $columnName . '"', $realColumnName);
-        }
+        $this->select = $columnArray;
+        $this->isSelfSelected = true;
 
         return $this;
     }
 
     /**
+     * @return array<string>
+     */
+    protected function resolveSelectAll(): array
+    {
+        $columnArray = [];
+        foreach ($this->getTableMap()->getColumns() as $columnMap) {
+            $columnArray[] = $this->modelName . '.' . $columnMap->getPhpName();
+        }
+
+        return $columnArray;
+    }
+
+    /**
      * Retrieves the columns defined by a previous call to select().
-     *
-     * @deprecated Not needed anymore, selected columns are part of {@link Criteria::$asColumns}
      *
      * @see select()
      *
@@ -509,7 +526,7 @@ class ModelCriteria extends BaseModelCriteria
      */
     public function getSelect()
     {
-        return array_values($this->asColumns);
+        return $this->select;
     }
 
     /**
@@ -884,7 +901,7 @@ class ModelCriteria extends BaseModelCriteria
     /**
      * Adds and returns an internal query to be used in an EXISTS-clause.
      *
-     * @phpstan-param ExistsCriterion::TYPE_* $type
+     * @phpstan-param \Propel\Runtime\ActiveQuery\Criterion\ExistsCriterion::TYPE_* $type
      *
      * @param string $relationName name of the relation
      * @param string|null $modelAlias sets an alias for the nested query
@@ -976,6 +993,8 @@ class ModelCriteria extends BaseModelCriteria
         $this->with = [];
         $this->primaryCriteria = null;
         $this->formatter = null;
+        $this->select = null;
+        $this->isSelfSelected = false;
 
         return $this;
     }
@@ -1637,6 +1656,8 @@ class ModelCriteria extends BaseModelCriteria
      */
     public function doCount(?ConnectionInterface $con = null)
     {
+        $this->configureSelectColumns();
+
         // check that the columns of the main class are already added (if this is the primary ModelCriteria)
         if (!$this->hasSelectClause() && !$this->getPrimaryCriteria()) {
             $this->addSelfSelectColumns();
@@ -1903,7 +1924,7 @@ class ModelCriteria extends BaseModelCriteria
      * Issue an UPDATE query based the current ModelCriteria and a list of changes.
      * This method is called by ModelCriteria::update() inside a transaction.
      *
-     * @param array|\Propel\Runtime\ActiveQuery\Criteria $updateValues Associative array of keys and values to replace
+     * @param \Propel\Runtime\ActiveQuery\Criteria|array $updateValues Associative array of keys and values to replace
      * @param \Propel\Runtime\Connection\ConnectionInterface $con a connection object
      * @param bool $forceIndividualSaves If false (default), the resulting call is a Criteria::doUpdate(), otherwise it is a series of save() calls on all the found objects
      *
@@ -1915,7 +1936,7 @@ class ModelCriteria extends BaseModelCriteria
     {
         if ($forceIndividualSaves) {
             // Update rows one by one
-            $objects = $this->setFormatter(ModelCriteria::FORMAT_OBJECT)->find($con);
+            $objects = $this->setFormatter(self::FORMAT_OBJECT)->find($con);
             foreach ($objects as $object) {
                 foreach ($updateValues as $key => $value) {
                     $object->setByName($key, $value);
@@ -2203,19 +2224,56 @@ class ModelCriteria extends BaseModelCriteria
      */
     public function doSelect(?ConnectionInterface $con = null)
     {
+        $this->configureSelectColumns();
+
         $this->addSelfSelectColumns();
 
         return parent::doSelect($con);
     }
 
     /**
-     * @deprecated This method was used to add columns from {@link select()} during query generation, but that is handled
-     * right away now.
+     * {@inheritDoc}
+     *
+     * @see \Propel\Runtime\ActiveQuery\Criteria::createSelectSql()
+     *
+     * @param array $params Parameters that are to be replaced in prepared statement.
+     *
+     * @return string
+     */
+    public function createSelectSql(&$params)
+    {
+        $this->configureSelectColumns();
+
+        return parent::createSelectSql($params);
+    }
+
+    /**
+     * @throws \Propel\Runtime\Exception\PropelException
      *
      * @return void
      */
     public function configureSelectColumns()
     {
+        if (!$this->select) {
+            return;
+        }
+
+        if ($this->formatter === null) {
+            $this->setFormatter(SimpleArrayFormatter::class);
+        }
+        $this->selectColumns = [];
+
+        foreach ($this->select as $columnName) {
+            if (array_key_exists($columnName, $this->asColumns)) {
+                continue;
+            }
+            [$columnMap, $realColumnName] = $this->getColumnFromName($columnName);
+            if ($realColumnName === null) {
+                throw new PropelException("Cannot find selected column '$columnName'");
+            }
+            // always put quotes around the columnName to be safe, we strip them in the formatter
+            $this->addAsColumn('"' . $columnName . '"', $realColumnName);
+        }
     }
 
     /**
@@ -2401,9 +2459,9 @@ class ModelCriteria extends BaseModelCriteria
             $relation = substr($name, $pos + 8);
             if (!$relation) {
                 $relation = $arguments[0];
-                $joinType = isset($arguments[1]) ? $arguments[1] : $joinType;
+                $joinType = $arguments[1] ?? $joinType;
             } else {
-                $joinType = isset($arguments[0]) ? $arguments[0] : $joinType;
+                $joinType = $arguments[0] ?? $joinType;
             }
 
             return $this->joinWith($relation, $joinType);

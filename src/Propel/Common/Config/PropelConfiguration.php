@@ -25,7 +25,7 @@ class PropelConfiguration implements ConfigurationInterface
      *
      * @return \Symfony\Component\Config\Definition\Builder\TreeBuilder The tree builder
      */
-    public function getConfigTreeBuilder()
+    public function getConfigTreeBuilder(): TreeBuilder
     {
         $treeBuilder = new TreeBuilder('propel');
 
@@ -292,7 +292,7 @@ class PropelConfiguration implements ConfigurationInterface
                         ->arrayNode('profiler')
                             ->children()
                                 ->scalarNode('classname')->defaultValue('\Propel\Runtime\Util\Profiler')->end()
-                                ->floatNode('slowTreshold')->defaultValue(0.1)->end()
+                                ->floatNode('slowThreshold')->defaultValue(0.1)->end()
                                 ->arrayNode('details')
                                     ->children()
                                         ->arrayNode('time')

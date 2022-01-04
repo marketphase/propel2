@@ -17,30 +17,49 @@ namespace Propel\Runtime\Parser;
  */
 class CsvParser extends AbstractParser
 {
+    /**
+     * @var int
+     */
     public const QUOTE_NONE = 0;
+
+    /**
+     * @var int
+     */
     public const QUOTE_ALL = 1;
+
+    /**
+     * @var int
+     */
     public const QUOTE_NONNUMERIC = 2;
+
+    /**
+     * @var int
+     */
     public const QUOTE_MINIMAL = 3;
 
     /**
+     * @phpstan-var non-empty-string
+     *
      * @var string
      */
-    public $delimiter = ',';
+    public string $delimiter = ',';
+
+    /**
+     * @phpstan-var non-empty-string
+     *
+     * @var string
+     */
+    public string $lineTerminator = "\r\n";
 
     /**
      * @var string
      */
-    public $lineTerminator = "\r\n";
+    public string $quotechar = '"';
 
     /**
      * @var string
      */
-    public $quotechar = '"';
-
-    /**
-     * @var string
-     */
-    public $escapechar = '\\';
+    public string $escapechar = '\\';
 
     /**
      * @var int
@@ -140,7 +159,7 @@ class CsvParser extends AbstractParser
         return str_replace(
             $this->quotechar,
             $this->escapechar . $this->quotechar,
-            $input
+            $input,
         );
     }
 
@@ -317,7 +336,7 @@ class CsvParser extends AbstractParser
         return str_replace(
             $this->escapechar . $this->quotechar,
             $this->quotechar,
-            $input
+            $input,
         );
     }
 

@@ -22,11 +22,34 @@ use Propel\Generator\Model\Table;
  */
 class AggregateMultipleColumnsBehavior extends Behavior
 {
+    /**
+     * @var string
+     */
     public const PARAMETER_KEY_FOREIGN_TABLE = 'foreign_table';
+
+    /**
+     * @var string
+     */
     public const PARAMETER_KEY_FOREIGN_SCHEMA = 'foreign_schema';
+
+    /**
+     * @var string
+     */
     public const PARAMETER_KEY_CONDITION = 'condition';
+
+    /**
+     * @var string
+     */
     public const PARAMETER_KEY_COLUMNS = 'columns';
+
+    /**
+     * @var string
+     */
     public const PARAMETER_KEY_COLUMN_NAME = 'column_name';
+
+    /**
+     * @var string
+     */
     public const PARAMETER_KEY_COLUMN_EXPRESSION = 'expression';
 
     /**
@@ -60,7 +83,7 @@ class AggregateMultipleColumnsBehavior extends Behavior
      */
     public static function resetInsertedAggregationNames(): void
     {
-        static::$insertedAggregationNames = [];
+        self::$insertedAggregationNames = [];
     }
 
     /**
@@ -93,11 +116,11 @@ class AggregateMultipleColumnsBehavior extends Behavior
         $foreignTableName = $this->getForeignTable()->getPhpName();
         $baseAggregationName = 'AggregatedColumnsFrom' . $foreignTableName;
         $tableName = $this->getTable()->getPhpName();
-        if (!array_key_exists($tableName, static::$insertedAggregationNames)) {
-            static::$insertedAggregationNames[$tableName] = [];
+        if (!array_key_exists($tableName, self::$insertedAggregationNames)) {
+            self::$insertedAggregationNames[$tableName] = [];
         }
 
-        $existingNames = &static::$insertedAggregationNames[$tableName];
+        $existingNames = &self::$insertedAggregationNames[$tableName];
         if (!in_array($baseAggregationName, $existingNames)) {
             $existingNames[] = $baseAggregationName;
 
@@ -235,7 +258,7 @@ class AggregateMultipleColumnsBehavior extends Behavior
             'SELECT %s FROM %s WHERE %s',
             $this->buildSelectionStatement(),
             $builder->getTable()->quoteIdentifier($foreignTableName),
-            implode(' AND ', $conditions)
+            implode(' AND ', $conditions),
         );
 
         return $this->renderTemplate('objectCompute', [
@@ -270,7 +293,7 @@ class AggregateMultipleColumnsBehavior extends Behavior
     {
         $table = $this->getTable();
         $columnPhpNames = array_map(function (array $columnParameters) use ($table) {
-            $columName = $columnParameters[AggregateMultipleColumnsBehavior::PARAMETER_KEY_COLUMN_NAME];
+            $columName = $columnParameters[self::PARAMETER_KEY_COLUMN_NAME];
 
             return $table->getColumn($columName)->getPhpName();
         },
@@ -318,7 +341,7 @@ class AggregateMultipleColumnsBehavior extends Behavior
         // let's infer the relation from the foreign table
         $fks = $foreignTable->getForeignKeysReferencingTable($this->getTable()->getName());
         if (!$fks) {
-            $msg = 'You must define a foreign key from the \'%s\' table to the table witht the aggregated columns';
+            $msg = 'You must define a foreign key from the \'%s\' table to the table with the aggregated columns';
             $this->throwInvalidArgumentExceptionWithLocation($msg, $foreignTable->getName());
         }
 

@@ -31,37 +31,37 @@ class Table extends ScopedMappingModel implements IdMethod
     use BehaviorableTrait;
 
     /**
-     * @var \Propel\Generator\Model\Column[]
+     * @var array<\Propel\Generator\Model\Column>
      */
     private $columns = [];
 
     /**
-     * @var \Propel\Generator\Model\ForeignKey[]
+     * @var array<\Propel\Generator\Model\ForeignKey>
      */
     private $foreignKeys = [];
 
     /**
-     * @var \Propel\Generator\Model\ForeignKey[]
+     * @var array<\Propel\Generator\Model\ForeignKey>
      */
     private $foreignKeysByName = [];
 
     /**
-     * @var string[]
+     * @var array<string>
      */
     private $foreignTableNames = [];
 
     /**
-     * @var \Propel\Generator\Model\Index[]
+     * @var array<\Propel\Generator\Model\Index>
      */
     private $indices = [];
 
     /**
-     * @var \Propel\Generator\Model\Unique[]
+     * @var array<\Propel\Generator\Model\Unique>
      */
     private $unices = [];
 
     /**
-     * @var \Propel\Generator\Model\IdMethodParameter[]
+     * @var array<\Propel\Generator\Model\IdMethodParameter>
      */
     private $idMethodParameters = [];
 
@@ -106,7 +106,7 @@ class Table extends ScopedMappingModel implements IdMethod
     private $database;
 
     /**
-     * @var \Propel\Generator\Model\ForeignKey[]
+     * @var array<\Propel\Generator\Model\ForeignKey>
      */
     private $referrers = [];
 
@@ -318,13 +318,13 @@ class Table extends ScopedMappingModel implements IdMethod
     /**
      * Returns a build property value for the database this table belongs to.
      *
-     * @param string $key
+     * @param string $name
      *
      * @return string
      */
-    public function getBuildProperty($key)
+    public function getBuildProperty($name)
     {
-        return $this->database ? $this->database->getBuildProperty($key) : '';
+        return $this->database ? $this->database->getBuildProperty($name) : '';
     }
 
     /**
@@ -427,13 +427,14 @@ class Table extends ScopedMappingModel implements IdMethod
     public function addExtraIndices()
     {
         /**
-         * A collection of indexed columns. The keys is the column name
+         * A collection of indexed columns. The key is the column name
          * (concatenated with a comma in the case of multi-col index), the value is
          * an array with the names of the indexes that index these columns. We use
          * it to determine which additional indexes must be created for foreign
          * keys. It could also be used to detect duplicate indexes, but this is not
          * implemented yet.
-         * @var array
+         *
+         * @var array<string, array<string>> $_indices
          */
         $_indices = [];
 
@@ -668,7 +669,7 @@ class Table extends ScopedMappingModel implements IdMethod
     /**
      * Adds several columns at once.
      *
-     * @param \Propel\Generator\Model\Column[] $columns An array of Column instance
+     * @param array<\Propel\Generator\Model\Column> $columns An array of Column instance
      *
      * @return void
      */
@@ -769,7 +770,7 @@ class Table extends ScopedMappingModel implements IdMethod
             return $fk;
         }
 
-        $fk = new ForeignKey(isset($foreignKey['name']) ? $foreignKey['name'] : null);
+        $fk = new ForeignKey($foreignKey['name'] ?? null);
         $fk->setTable($this);
         $fk->loadMapping($foreignKey);
 
@@ -779,7 +780,7 @@ class Table extends ScopedMappingModel implements IdMethod
     /**
      * Adds several foreign keys at once.
      *
-     * @param \Propel\Generator\Model\ForeignKey[] $foreignKeys An array of ForeignKey objects
+     * @param array<\Propel\Generator\Model\ForeignKey> $foreignKeys An array of ForeignKey objects
      *
      * @return void
      */
@@ -848,7 +849,7 @@ class Table extends ScopedMappingModel implements IdMethod
     /**
      * Returns the list of references to this table.
      *
-     * @return \Propel\Generator\Model\ForeignKey[]
+     * @return array<\Propel\Generator\Model\ForeignKey>
      */
     public function getReferrers()
     {
@@ -882,7 +883,7 @@ class Table extends ScopedMappingModel implements IdMethod
                 throw new BuildException(sprintf(
                     'Table "%s" contains a foreign key to nonexistent table "%s"',
                     $this->getName(),
-                    $foreignKey->getForeignTableName()
+                    $foreignKey->getForeignTableName(),
                 ));
             }
 
@@ -901,7 +902,7 @@ class Table extends ScopedMappingModel implements IdMethod
                     throw new BuildException(sprintf(
                         'Table "%s" contains a foreign key with nonexistent local column "%s"',
                         $this->getName(),
-                        $localColumnName
+                        $localColumnName,
                     ));
                 }
             }
@@ -924,7 +925,7 @@ class Table extends ScopedMappingModel implements IdMethod
                         'Table "%s" contains a foreign key to table "%s" with nonexistent column "%s"',
                         $this->getName(),
                         $foreignTable->getName(),
-                        $foreignColumnName
+                        $foreignColumnName,
                     ));
                 }
             }
@@ -942,7 +943,7 @@ class Table extends ScopedMappingModel implements IdMethod
                             'Table "%s" contains a foreign key to table "%s" but does not have a reference to foreign primary key "%s"',
                             $this->getName(),
                             $foreignTable->getName(),
-                            $foreignPrimaryKey->getName()
+                            $foreignPrimaryKey->getName(),
                         ));
                     }
                 }
@@ -957,7 +958,7 @@ class Table extends ScopedMappingModel implements IdMethod
     /**
      * Returns the list of cross foreign keys.
      *
-     * @return \Propel\Generator\Model\CrossForeignKeys[]
+     * @return array<\Propel\Generator\Model\CrossForeignKeys>
      */
     public function getCrossFks()
     {
@@ -985,16 +986,17 @@ class Table extends ScopedMappingModel implements IdMethod
     /**
      * Returns all required(notNull && no defaultValue) primary keys which are not in $primaryKeys.
      *
-     * @param \Propel\Generator\Model\Column[] $primaryKeys
+     * @param array<\Propel\Generator\Model\Column> $primaryKeys
      *
-     * @return \Propel\Generator\Model\Column[]
+     * @return array<\Propel\Generator\Model\Column>
      */
     public function getOtherRequiredPrimaryKeys(array $primaryKeys)
     {
+        /** @var array<\Propel\Generator\Model\Column> $pks */
         $pks = [];
         foreach ($this->getPrimaryKey() as $primaryKey) {
             if ($primaryKey->isNotNull() && !$primaryKey->hasDefaultValue() && !in_array($primaryKey, $primaryKeys, true)) {
-                $pks = $primaryKey;
+                $pks[] = $primaryKey;
             }
         }
 
@@ -1002,7 +1004,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Sets whether or not this table contains a foreign primary key.
+     * Sets whether this table contains a foreign primary key.
      *
      * @param bool $containsForeignPK
      *
@@ -1014,7 +1016,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Returns whether or not this table contains a foreign primary key.
+     * Returns whether this table contains a foreign primary key.
      *
      * @return bool
      */
@@ -1107,8 +1109,6 @@ class Table extends ScopedMappingModel implements IdMethod
      * Adds a new index to the indices list and set the
      * parent table of the column to the current table.
      *
-     * @throw InvalidArgumentException
-     *
      * @param \Propel\Generator\Model\Index|array $index
      *
      * @throws \Propel\Generator\Exception\InvalidArgumentException
@@ -1176,7 +1176,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Returns whether or not the table behaviors offer additional builders.
+     * Returns whether the table behaviors offer additional builders.
      *
      * @return bool
      */
@@ -1196,7 +1196,7 @@ class Table extends ScopedMappingModel implements IdMethod
      *
      * @deprecated Unused (no isEarly() method available).
      *
-     * @return \Propel\Generator\Model\Behavior[] Array of Behavior objects
+     * @return array<\Propel\Generator\Model\Behavior> Array of Behavior objects
      */
     public function getEarlyBehaviors()
     {
@@ -1253,7 +1253,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Returns whether or not this table is linked to a schema.
+     * Returns whether this table is linked to a schema.
      *
      * @return bool
      */
@@ -1276,7 +1276,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Returns whether or not the table has a description.
+     * Returns whether the table has a description.
      *
      * @return bool
      */
@@ -1332,7 +1332,7 @@ class Table extends ScopedMappingModel implements IdMethod
      */
     private function buildPhpName($name)
     {
-        return NameFactory::generateName(NameFactory::PHP_GENERATOR, [ $name, $this->phpNamingMethod ]);
+        return NameFactory::generateName(NameFactory::PHP_GENERATOR, [$name, (string)$this->phpNamingMethod]);
     }
 
     /**
@@ -1454,7 +1454,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Returns whether or not Propel has to skip DDL SQL generation for this
+     * Returns whether Propel has to skip DDL SQL generation for this
      * table (in the event it should not be created from scratch).
      *
      * @return bool
@@ -1465,7 +1465,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Sets whether or not this table should have its SQL DDL code generated.
+     * Sets whether this table should have its SQL DDL code generated.
      *
      * @param bool $skip
      *
@@ -1477,7 +1477,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Returns whether or not this table is read-only. If yes, only only
+     * Returns whether this table is read-only. If yes, only only
      * accessors and relationship accessors and mutators will be generated.
      *
      * @return bool
@@ -1522,7 +1522,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Returns whether or not to force object to reload on UPDATE.
+     * Returns whether to force object to reload on UPDATE.
      *
      * @return bool
      */
@@ -1554,7 +1554,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Returns whether or not this table is specified in the schema or if there
+     * Returns whether this table is specified in the schema or if there
      * is just a foreign key reference to it.
      *
      * @return bool
@@ -1565,7 +1565,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Sets whether or not this table is specified in the schema or if there is
+     * Sets whether this table is specified in the schema or if there is
      * just a foreign key reference to it.
      *
      * @param string $alias
@@ -1600,7 +1600,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Returns whether or not a table is abstract, it marks the business object
+     * Returns whether a table is abstract, it marks the business object
      * class that is generated as being abstract. If you have a table called
      * "FOO", then the Foo business object class will be declared abstract. This
      * helps support class hierarchies
@@ -1613,7 +1613,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Sets whether or not a table is abstract, it marks the business object
+     * Sets whether a table is abstract, it marks the business object
      * class that is generated as being abstract. If you have a
      * table called "FOO", then the Foo business object class will be
      * declared abstract. This helps support class hierarchies
@@ -1630,7 +1630,7 @@ class Table extends ScopedMappingModel implements IdMethod
     /**
      * Returns an array containing all Column objects in the table.
      *
-     * @return \Propel\Generator\Model\Column[]
+     * @return array<\Propel\Generator\Model\Column>
      */
     public function getColumns()
     {
@@ -1665,7 +1665,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Returns whether or not one of the columns is of type ENUM or SET.
+     * Returns whether one of the columns is of type ENUM or SET.
      *
      * @return bool
      */
@@ -1683,7 +1683,7 @@ class Table extends ScopedMappingModel implements IdMethod
     /**
      * Returns the list of all foreign keys.
      *
-     * @return \Propel\Generator\Model\ForeignKey[]
+     * @return array<\Propel\Generator\Model\ForeignKey>
      */
     public function getForeignKeys()
     {
@@ -1694,7 +1694,7 @@ class Table extends ScopedMappingModel implements IdMethod
      * Returns a Collection of parameters relevant for the chosen
      * id generation method.
      *
-     * @return \Propel\Generator\Model\IdMethodParameter[]
+     * @return array<\Propel\Generator\Model\IdMethodParameter>
      */
     public function getIdMethodParameters()
     {
@@ -1704,7 +1704,7 @@ class Table extends ScopedMappingModel implements IdMethod
     /**
      * Returns the list of all indices of this table.
      *
-     * @return \Propel\Generator\Model\Index[]
+     * @return array<\Propel\Generator\Model\Index>
      */
     public function getIndices()
     {
@@ -1714,7 +1714,7 @@ class Table extends ScopedMappingModel implements IdMethod
     /**
      * Returns the list of all unique indices of this table.
      *
-     * @return \Propel\Generator\Model\Unique[]
+     * @return array<\Propel\Generator\Model\Unique>
      */
     public function getUnices()
     {
@@ -1725,7 +1725,7 @@ class Table extends ScopedMappingModel implements IdMethod
      * Checks if $keys are a unique constraint in the table.
      * (through primaryKey, through a regular unices constraints or for single keys when it has isUnique=true)
      *
-     * @param \Propel\Generator\Model\Column[]|string[] $keys
+     * @param array<\Propel\Generator\Model\Column>|array<string> $keys
      *
      * @return bool
      */
@@ -1824,7 +1824,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Returns whether or not the table has a column.
+     * Returns whether the table has a column.
      *
      * @param \Propel\Generator\Model\Column|string $column The Column object or its name
      * @param bool $caseInsensitive Whether the check is case insensitive.
@@ -1887,7 +1887,7 @@ class Table extends ScopedMappingModel implements IdMethod
      *
      * @param string $tableName
      *
-     * @return \Propel\Generator\Model\ForeignKey[]
+     * @return array<\Propel\Generator\Model\ForeignKey>
      */
     public function getForeignKeysReferencingTable($tableName)
     {
@@ -1910,7 +1910,7 @@ class Table extends ScopedMappingModel implements IdMethod
      *
      * @param string $column Name of the column
      *
-     * @return \Propel\Generator\Model\ForeignKey[]
+     * @return array<\Propel\Generator\Model\ForeignKey>
      */
     public function getColumnForeignKeys($column)
     {
@@ -1981,7 +1981,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Returns whether or not code and SQL must be created for this table.
+     * Returns whether code and SQL must be created for this table.
      *
      * Table will be skipped, if return true.
      *
@@ -1993,7 +1993,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Returns whether or not to determine if code/sql gets created for this table.
+     * Returns whether to determine if code/sql gets created for this table.
      * Table will be skipped, if set to true.
      *
      * @param bool $flag
@@ -2009,7 +2009,7 @@ class Table extends ScopedMappingModel implements IdMethod
      * Returns the collection of Columns which make up the single primary
      * key for this table.
      *
-     * @return \Propel\Generator\Model\Column[]
+     * @return array<\Propel\Generator\Model\Column>
      */
     public function getPrimaryKey()
     {
@@ -2024,7 +2024,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Returns whether or not this table has a primary key.
+     * Returns whether this table has a primary key.
      *
      * @return bool
      */
@@ -2034,7 +2034,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Returns whether or not this table has a composite primary key.
+     * Returns whether this table has a composite primary key.
      *
      * @return bool
      */
@@ -2078,7 +2078,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Returns whether or not this table has any auto-increment primary keys.
+     * Returns whether this table has any auto-increment primary keys.
      *
      * @return bool
      */
@@ -2106,7 +2106,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Returns whether or not there is a cross reference status for this foreign
+     * Returns whether there is a cross reference status for this foreign
      * key.
      *
      * @return bool
@@ -2151,7 +2151,7 @@ class Table extends ScopedMappingModel implements IdMethod
     }
 
     /**
-     * Returns whether or not the table has foreign keys.
+     * Returns whether the table has foreign keys.
      *
      * @return bool
      */

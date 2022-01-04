@@ -25,7 +25,7 @@ use Propel\Generator\Schema\Dumper\XmlDumper;
 class Schema
 {
     /**
-     * @var \Propel\Generator\Model\Database[]
+     * @var array<\Propel\Generator\Model\Database>
      */
     private $databases;
 
@@ -145,12 +145,12 @@ class Schema
     /**
      * Returns an array of all databases.
      *
-     * The first boolean parameter tells whether or not to run the
+     * The first boolean parameter tells whether to run the
      * final initialization process.
      *
      * @param bool $doFinalInitialization
      *
-     * @return \Propel\Generator\Model\Database[]
+     * @return array<\Propel\Generator\Model\Database>
      */
     public function getDatabases($doFinalInitialization = true)
     {
@@ -164,7 +164,7 @@ class Schema
     }
 
     /**
-     * Returns whether or not this schema has multiple databases.
+     * Returns whether this schema has multiple databases.
      *
      * @return bool
      */
@@ -206,7 +206,7 @@ class Schema
     }
 
     /**
-     * Returns whether or not a database with the specified name exists in this
+     * Returns whether a database with the specified name exists in this
      * schema.
      *
      * @param string $name
@@ -243,7 +243,7 @@ class Schema
                     $platform = $config->getConfiguredPlatform(null, $database->getName());
                 }
 
-                $database->setPlatform($platform ? $platform : $this->platform);
+                $database->setPlatform($platform ?: $this->platform);
             }
             $this->databases[] = $database;
 
@@ -276,7 +276,7 @@ class Schema
     /**
      * Merge other Schema objects together into this Schema object.
      *
-     * @param \Propel\Generator\Model\Schema[] $schemas
+     * @param array<\Propel\Generator\Model\Schema> $schemas
      *
      * @throws \Propel\Generator\Exception\EngineException
      *

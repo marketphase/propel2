@@ -14,7 +14,7 @@ use Propel\Runtime\Propel;
 trait InstancePoolTrait
 {
     /**
-     * @var object[]
+     * @var array<object>
      */
     public static $instances = [];
 
@@ -26,19 +26,22 @@ trait InstancePoolTrait
      */
     public static function addInstanceToPool($object, $key = null)
     {
-        if (Propel::isInstancePoolingEnabled()) {
-            if ($key === null) {
-                $key = static::getInstanceKey($object);
-            }
-
-            self::$instances[$key] = $object;
+        if (!Propel::isInstancePoolingEnabled()) {
+            return;
         }
+        if ($key === null) {
+            $key = static::getInstanceKey($object);
+        }
+        if (empty($key)) {
+            return;
+        }
+        self::$instances[$key] = $object;
     }
 
     /**
      * @param mixed $value
      *
-     * @return string
+     * @return string|null
      */
     public static function getInstanceKey($value)
     {
@@ -58,6 +61,8 @@ trait InstancePoolTrait
             // assume we've been passed a primary key
             return (string)$value;
         }
+
+        return null;
     }
 
     /**

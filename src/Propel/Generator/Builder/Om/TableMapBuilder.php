@@ -30,9 +30,9 @@ class TableMapBuilder extends AbstractOMBuilder
     }
 
     /**
-     * @return string
+     * @return string|null
      */
-    public function getNamespace()
+    public function getNamespace(): ?string
     {
         if (!$namespace = parent::getNamespace()) {
             return 'Map';
@@ -128,7 +128,7 @@ class " . $this->getUnqualifiedClassName() . " extends TableMap
             '\Propel\Runtime\Connection\ConnectionInterface',
             '\Propel\Runtime\Exception\PropelException',
             '\Propel\Runtime\DataFetcher\DataFetcherInterface',
-            '\Propel\Runtime\Propel'
+            '\Propel\Runtime\Propel',
         );
 
         $script .= $this->addConstants();
@@ -457,14 +457,14 @@ class " . $this->getUnqualifiedClassName() . " extends TableMap
         $arrayString = '';
         foreach ($tableColumns as $column) {
             $variants = [
-                $column->getPhpName(),                                    // ColumnName => COLUMN_NAME
-                $table->getPhpName() . '.' . $column->getPhpName(),       // TableName.ColumnName => COLUMN_NAME
-                $column->getCamelCaseName(),                              // columnName => COLUMN_NAME
+                $column->getPhpName(), // ColumnName => COLUMN_NAME
+                $table->getPhpName() . '.' . $column->getPhpName(), // TableName.ColumnName => COLUMN_NAME
+                $column->getCamelCaseName(), // columnName => COLUMN_NAME
                 $table->getCamelCaseName() . '.' . $column->getCamelCaseName(), // tableName.columnName => COLUMN_NAME
-                $this->getColumnConstant($column, $this->getTableMapClass()),   // TableNameTableMap::COL_COLUMN_NAME => COLUMN_NAME
-                $column->getConstantName(),                               // COL_COLUMN_NAME => COLUMN_NAME
-                $column->getName(),                                       // column_name => COLUMN_NAME
-                $table->getName() . '.' . $column->getName(),             // table_name.column_name => COLUMN_NAME
+                $this->getColumnConstant($column, $this->getTableMapClass()), // TableNameTableMap::COL_COLUMN_NAME => COLUMN_NAME
+                $column->getConstantName(), // COL_COLUMN_NAME => COLUMN_NAME
+                $column->getName(), // column_name => COLUMN_NAME
+                $table->getName() . '.' . $column->getName(), // table_name.column_name => COLUMN_NAME
             ];
 
             $variants = array_unique($variants);
@@ -618,6 +618,8 @@ class " . $this->getUnqualifiedClassName() . " extends TableMap
         $script .= "
     /**
      * Build the RelationMap objects for this table relationships
+     *
+     * @return void
      */
     public function buildRelations()
     {";
@@ -701,7 +703,7 @@ class " . $this->getUnqualifiedClassName() . " extends TableMap
     }
 
     /**
-     * @param bool|int|float|string|array|null $value
+     * @param array|string|float|int|bool|null $value
      *
      * @return string
      */
@@ -712,9 +714,9 @@ class " . $this->getUnqualifiedClassName() . " extends TableMap
         }
 
         $items = [];
-        foreach ($value as $key => $value) {
+        foreach ($value as $key => $arrayValue) {
             $keyString = var_export($key, true);
-            $valString = $this->stringify($value);
+            $valString = $this->stringify($arrayValue);
             $items[] = "$keyString => $valString";
         }
         $itemsCsv = implode(', ', $items);
@@ -725,7 +727,7 @@ class " . $this->getUnqualifiedClassName() . " extends TableMap
     /**
      * Adds the PHP code to return a instance pool key for the passed-in primary key variable names.
      *
-     * @param string[]|string $pkphp An array of PHP var names / method calls representing complete pk.
+     * @param array<string>|string $pkphp An array of PHP var names / method calls representing complete pk.
      *
      * @return string
      */
@@ -1025,7 +1027,7 @@ class " . $this->getUnqualifiedClassName() . " extends TableMap
      *
      * @param array   \$row ConnectionInterface result row.
      * @param int     \$colnum Column to examine for OM class information (first is 0).
-     * @param boolean \$withPrefix Whether or not to return the path with the class name
+     * @param boolean \$withPrefix Whether to return the path with the class name
      * @throws PropelException Any exceptions caught during processing will be
      *                         rethrown wrapped into a PropelException.
      *
@@ -1095,7 +1097,7 @@ class " . $this->getUnqualifiedClassName() . " extends TableMap
      * relative to a location on the PHP include_path.
      * (e.g. path.to.MyClass -> 'path/to/MyClass.php')
      *
-     * @param boolean \$withPrefix Whether or not to return the path with the class name
+     * @param boolean \$withPrefix Whether to return the path with the class name
      * @return string path.to.ClassName
      */
     public static function getOMClass(\$withPrefix = true)

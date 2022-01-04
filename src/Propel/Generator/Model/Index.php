@@ -30,17 +30,17 @@ class Index extends MappingModel
     protected $table;
 
     /**
-     * @var string[]
+     * @var array<string>
      */
     protected $columns = [];
 
     /**
-     * @var \Propel\Generator\Model\Column[]
+     * @var array<\Propel\Generator\Model\Column>
      */
     protected $columnObjects = [];
 
     /**
-     * @var int[]
+     * @var array<int>
      */
     protected $columnsSize = [];
 
@@ -232,7 +232,7 @@ class Index extends MappingModel
     }
 
     /**
-     * Returns whether or not there is a size for the specified column.
+     * Returns whether there is a size for the specified column.
      *
      * @param string $name
      *
@@ -263,7 +263,7 @@ class Index extends MappingModel
             return null;
         }
 
-        return isset($this->columnsSize[$name]) ? $this->columnsSize[$name] : null;
+        return $this->columnsSize[$name] ?? null;
     }
 
     /**
@@ -279,12 +279,12 @@ class Index extends MappingModel
     }
 
     /**
-     * Returns whether or not this index has a given column at a given position.
+     * Returns whether this index has a given column at a given position.
      *
      * @param int $pos Position in the column list
      * @param string $name Column name
      * @param int|null $size Optional size check
-     * @param bool $caseInsensitive Whether or not the comparison is case insensitive (false by default)
+     * @param bool $caseInsensitive Whether the comparison is case insensitive (false by default)
      *
      * @return bool
      */
@@ -312,7 +312,7 @@ class Index extends MappingModel
     }
 
     /**
-     * Returns whether or not the index has columns.
+     * Returns whether the index has columns.
      *
      * @return bool
      */
@@ -326,7 +326,7 @@ class Index extends MappingModel
      *
      * You should not edit this list.
      *
-     * @return string[]
+     * @return array<string>
      */
     public function getColumns()
     {
@@ -342,7 +342,7 @@ class Index extends MappingModel
     }
 
     /**
-     * @return \Propel\Generator\Model\Column[]
+     * @return array<\Propel\Generator\Model\Column>
      */
     public function getColumnObjects()
     {
@@ -350,7 +350,7 @@ class Index extends MappingModel
     }
 
     /**
-     * @param \Propel\Generator\Model\Column[] $columnObjects
+     * @param array<\Propel\Generator\Model\Column> $columnObjects
      *
      * @return void
      */

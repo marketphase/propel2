@@ -65,7 +65,7 @@ class BaseModelCriteria extends Criteria implements IteratorAggregate
      * Creates a new instance with the default capacity which corresponds to
      * the specified database.
      *
-     * @param string|null $dbName The dabase name
+     * @param string|null $dbName The database name
      * @param string|null $modelName The phpName of a model, e.g. 'Book'
      * @param string|null $modelAlias The alias for the model in this query, e.g. 'b'
      */
@@ -82,7 +82,7 @@ class BaseModelCriteria extends Criteria implements IteratorAggregate
      *
      * @see with()
      *
-     * @return \Propel\Runtime\ActiveQuery\ModelWith[]
+     * @return array<\Propel\Runtime\ActiveQuery\ModelWith>
      */
     public function getWith()
     {
@@ -112,7 +112,7 @@ class BaseModelCriteria extends Criteria implements IteratorAggregate
      * $c->setFormatter(ModelCriteria::FORMAT_ARRAY);
      * </code>
      *
-     * @param string|\Propel\Runtime\Formatter\AbstractFormatter $formatter a formatter class name, or a formatter instance
+     * @param \Propel\Runtime\Formatter\AbstractFormatter|string $formatter a formatter class name, or a formatter instance
      *
      * @throws \Propel\Runtime\Exception\InvalidArgumentException
      *
@@ -234,7 +234,7 @@ class BaseModelCriteria extends Criteria implements IteratorAggregate
      */
     public function getModelAliasOrName()
     {
-        return $this->modelAlias ? $this->modelAlias : $this->modelName;
+        return $this->modelAlias ?: $this->modelName;
     }
 
     /**
@@ -244,7 +244,7 @@ class BaseModelCriteria extends Criteria implements IteratorAggregate
      */
     public function getModelShortName()
     {
-        return static::getShortName($this->modelName);
+        return static::getShortName($this->modelName ?: '');
     }
 
     /**
@@ -254,7 +254,7 @@ class BaseModelCriteria extends Criteria implements IteratorAggregate
      *
      * @return string The short class name
      */
-    public static function getShortName($fullyQualifiedClassName)
+    public static function getShortName(string $fullyQualifiedClassName)
     {
         $namespaceParts = explode('\\', $fullyQualifiedClassName);
 
@@ -298,7 +298,7 @@ class BaseModelCriteria extends Criteria implements IteratorAggregate
      *
      * @return \Traversable
      */
-    public function getIterator()
+    public function getIterator(): Traversable
     {
         $res = $this->find(null); // use the default connection
         if ($res instanceof IteratorAggregate) {

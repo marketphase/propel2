@@ -388,7 +388,7 @@ class ObjectCollection extends Collection
             $getMethod = 'get' . $symRelationMap->getName();
             $addMethod = 'add' . $relationName;
             foreach ($relatedObjects as $object) {
-                $mainObj = $object->$getMethod();  // instance pool is used here to avoid a query
+                $mainObj = $object->$getMethod(); // instance pool is used here to avoid a query
                 $mainObj->$addMethod($object);
             }
         } elseif ($relationMap->getType() === RelationMap::MANY_TO_ONE) {
@@ -437,7 +437,7 @@ class ObjectCollection extends Collection
      *
      * @return void
      */
-    public function offsetUnset($offset)
+    public function offsetUnset($offset): void
     {
         if (isset($this->data[$offset])) {
             if (is_object($this->data[$offset])) {
@@ -488,7 +488,7 @@ class ObjectCollection extends Collection
      *
      * @return void
      */
-    public function offsetSet($offset, $value)
+    public function offsetSet($offset, $value): void
     {
         if (!is_object($value)) {
             parent::offsetSet($offset, $value);

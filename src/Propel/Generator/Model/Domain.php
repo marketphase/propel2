@@ -85,7 +85,7 @@ class Domain extends MappingModel
             $this->setScale($scale);
         }
 
-        $this->setSqlType($sqlType !== null ? $sqlType : $type);
+        $this->setSqlType($sqlType ?? $type);
     }
 
     /**
@@ -111,7 +111,10 @@ class Domain extends MappingModel
      */
     protected function setupObject()
     {
-        $schemaType = strtoupper($this->getAttribute('type'));
+        $schemaType = !$this->getAttribute('type')
+            ? ''
+            : strtoupper($this->getAttribute('type'));
+
         $this->copy($this->database->getPlatform()->getDomainForType($schemaType));
 
         // Name
@@ -273,19 +276,21 @@ class Domain extends MappingModel
      *
      * @return string
      */
-    public function getType()
+    public function getType(): string
     {
-        return $this->mappingType;
+        // For some reason we're supporting null, but there are many functions that rely on the
+        // return value being a string.
+        return $this->mappingType ?: '';
     }
 
     /**
      * Sets the mapping type.
      *
-     * @param string $mappingType
+     * @param string|null $mappingType
      *
      * @return void
      */
-    public function setType($mappingType)
+    public function setType(?string $mappingType)
     {
         $this->mappingType = $mappingType;
     }
@@ -319,7 +324,7 @@ class Domain extends MappingModel
      *
      * @throws \Propel\Generator\Exception\EngineException
      *
-     * @return string|array|bool|null
+     * @return array|string|bool|null
      */
     public function getPhpDefaultValue()
     {
@@ -331,7 +336,7 @@ class Domain extends MappingModel
             throw new EngineException('Cannot get PHP version of default value for default value EXPRESSION.');
         }
 
-        if (in_array($this->mappingType, [ PropelTypes::BOOLEAN, PropelTypes::BOOLEAN_EMU ])) {
+        if (in_array($this->mappingType, [PropelTypes::BOOLEAN, PropelTypes::BOOLEAN_EMU])) {
             return $this->booleanValue($this->defaultValue->getValue());
         }
 
@@ -374,7 +379,7 @@ class Domain extends MappingModel
     /**
      * Returns the SQL type.
      *
-     * @return string
+     * @return string|null
      */
     public function getSqlType()
     {

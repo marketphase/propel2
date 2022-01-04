@@ -34,7 +34,7 @@ abstract class AbstractManager
     protected $dataModels = [];
 
     /**
-     * @var \Propel\Generator\Model\Database[]
+     * @var array<\Propel\Generator\Model\Database>
      */
     protected $databases;
 
@@ -159,7 +159,7 @@ abstract class AbstractManager
      * Returns the data models that have been
      * processed.
      *
-     * @return \Propel\Generator\Model\Schema[]
+     * @return array<\Propel\Generator\Model\Schema>
      */
     public function getDataModels()
     {
@@ -185,7 +185,7 @@ abstract class AbstractManager
     }
 
     /**
-     * @return \Propel\Generator\Model\Database[]
+     * @return array<\Propel\Generator\Model\Database>
      */
     public function getDatabases()
     {
@@ -375,9 +375,9 @@ abstract class AbstractManager
     }
 
     /**
-     * Replaces all external-schema nodes with the content of xml schema that node refers to
+     * Replaces all external-schema nodes with the content of XML schema that node refers to
      *
-     * Recurses to include any external schema referenced from in an included xml (and deeper)
+     * Recurses to include any external schema referenced from in an included XML (and deeper)
      * Note: this function very much assumes at least a reasonable XML schema, maybe it'll proof
      * users don't have those and adding some more informative exceptions would be better
      *
@@ -500,7 +500,7 @@ abstract class AbstractManager
      *
      * @throws \Exception
      *
-     * @return string[]
+     * @return array<string>
      */
     protected function getProperties($file)
     {

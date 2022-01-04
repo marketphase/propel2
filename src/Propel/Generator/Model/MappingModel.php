@@ -27,7 +27,7 @@ abstract class MappingModel implements MappingModelInterface
     /**
      * The list of vendor's information.
      *
-     * @var \Propel\Generator\Model\VendorInfo[]
+     * @var array<\Propel\Generator\Model\VendorInfo>
      */
     protected $vendorInfos = [];
 
@@ -105,7 +105,11 @@ abstract class MappingModel implements MappingModelInterface
             return (bool)$value;
         }
 
-        return in_array(strtolower($value), [ 'true', 't', 'y', 'yes' ], true);
+        if ($value === null) {
+            return false;
+        }
+
+        return in_array(strtolower($value), ['true', 't', 'y', 'yes'], true);
     }
 
     /**
@@ -113,7 +117,7 @@ abstract class MappingModel implements MappingModelInterface
      *
      * @return string|null
      */
-    protected function getDefaultValueForArray($stringValue)
+    protected function getDefaultValueForArray(string $stringValue)
     {
         $stringValue = trim($stringValue);
 
@@ -127,7 +131,7 @@ abstract class MappingModel implements MappingModelInterface
         }
 
         $value = implode(' | ', $values);
-        if (empty($value) || $value === ' | ') {
+        if ($value === ' | ') {
             return null;
         }
 
@@ -197,7 +201,7 @@ abstract class MappingModel implements MappingModelInterface
     /**
      * Returns the list of all vendor information.
      *
-     * @return \Propel\Generator\Model\VendorInfo[]
+     * @return array<\Propel\Generator\Model\VendorInfo>
      */
     public function getVendorInformation()
     {

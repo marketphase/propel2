@@ -42,7 +42,8 @@ class SqlInsertCommand extends AbstractCommand
         $manager = new SqlManager();
 
         $configOptions = [];
-        if ($sqlDir = $input->getOption('sql-dir')) {
+        $sqlDir = $input->getOption('sql-dir');
+        if ($sqlDir) {
             $configOptions['propel']['paths']['sqlDir'] = $sqlDir;
         }
 

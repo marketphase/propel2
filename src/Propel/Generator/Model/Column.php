@@ -26,12 +26,23 @@ use Propel\Generator\Platform\PlatformInterface;
  */
 class Column extends MappingModel
 {
+    /**
+     * @var string
+     */
     public const DEFAULT_TYPE = 'VARCHAR';
+
+    /**
+     * @var string
+     */
     public const DEFAULT_VISIBILITY = 'public';
+
+    /**
+     * @var string
+     */
     public const CONSTANT_PREFIX = 'COL_';
 
     /**
-     * @var string[]
+     * @var array<string>
      */
     public static $validVisibilities = [
         'public',
@@ -207,7 +218,7 @@ class Column extends MappingModel
     private $needsTransactionInPostgres = false;
 
     /**
-     * @var string[]
+     * @var array<string>
      */
     protected $valueSet = [];
 
@@ -271,8 +282,8 @@ class Column extends MappingModel
             if ($dom) {
                 $domain->copy($database->getDomain($dom));
             } else {
-                $type = strtoupper($this->getAttribute('type'));
-                if ($type) {
+                if ($this->getAttribute('type')) {
+                    $type = strtoupper($this->getAttribute('type'));
                     if ($platform) {
                         $domain->copy($platform->getDomainForType($type));
                     } else {
@@ -305,15 +316,15 @@ class Column extends MappingModel
 
             $this->namePrefix = $this->getAttribute(
                 'prefix',
-                $this->parentTable->getAttribute('columnPrefix')
+                $this->parentTable->getAttribute('columnPrefix'),
             );
 
-            // Accessor visibility
-            $visibility = $this->getMethodVisibility('accessorVisibility', 'defaultAccessorVisibility');
+            // Accessor visibility - no idea why this returns null, or the use case for that
+            $visibility = $this->getMethodVisibility('accessorVisibility', 'defaultAccessorVisibility') ?: '';
             $this->setAccessorVisibility($visibility);
 
             // Mutator visibility
-            $visibility = $this->getMethodVisibility('mutatorVisibility', 'defaultMutatorVisibility');
+            $visibility = $this->getMethodVisibility('mutatorVisibility', 'defaultMutatorVisibility') ?: '';
             $this->setMutatorVisibility($visibility);
 
             $this->isPrimaryString = $this->booleanValue($this->getAttribute('primaryString'));
@@ -374,7 +385,7 @@ class Column extends MappingModel
             throw new EngineException(sprintf(
                 'Error setting up column %s: %s',
                 $this->getAttribute('name'),
-                $e->getMessage()
+                $e->getMessage(),
             ));
         }
     }
@@ -399,9 +410,9 @@ class Column extends MappingModel
                 $parentAttribute,
                 $database->getAttribute(
                     $parentAttribute,
-                    self::DEFAULT_VISIBILITY
-                )
-            )
+                    self::DEFAULT_VISIBILITY,
+                ),
+            ),
         );
 
         return $visibility;
@@ -498,7 +509,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not the column name is plural.
+     * Returns whether the column name is plural.
      *
      * @return bool
      */
@@ -646,7 +657,7 @@ class Column extends MappingModel
      *
      * @return void
      */
-    public function setAccessorVisibility($visibility)
+    public function setAccessorVisibility(string $visibility)
     {
         $visibility = strtolower($visibility);
         if (!in_array($visibility, self::$validVisibilities)) {
@@ -677,7 +688,7 @@ class Column extends MappingModel
      *
      * @return void
      */
-    public function setMutatorVisibility($visibility)
+    public function setMutatorVisibility(string $visibility)
     {
         $visibility = strtolower($visibility);
         if (!in_array($visibility, self::$validVisibilities)) {
@@ -746,7 +757,7 @@ class Column extends MappingModel
      */
     public function getPhpType()
     {
-        return $this->phpType ? $this->phpType : $this->getPhpNative();
+        return $this->phpType ?: $this->getPhpNative();
     }
 
     /**
@@ -843,7 +854,7 @@ class Column extends MappingModel
     /**
      * Returns the inheritance list.
      *
-     * @return \Propel\Generator\Model\Inheritance[]
+     * @return array<\Propel\Generator\Model\Inheritance>
      */
     public function getInheritanceList()
     {
@@ -853,7 +864,7 @@ class Column extends MappingModel
     /**
      * Returns the inheritance definitions.
      *
-     * @return \Propel\Generator\Model\Inheritance[]
+     * @return array<\Propel\Generator\Model\Inheritance>
      */
     public function getChildren()
     {
@@ -861,7 +872,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not this column is a normal property or specifies a
+     * Returns whether this column is a normal property or specifies a
      * the classes that are represented in the table containing this column.
      *
      * @return bool
@@ -872,7 +883,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not possible classes have been enumerated in the
+     * Returns whether possible classes have been enumerated in the
      * schema file.
      *
      * @return bool
@@ -883,7 +894,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not the column is not null.
+     * Returns whether the column is not null.
      *
      * @return bool
      */
@@ -893,7 +904,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Sets whether or not the column is not null.
+     * Sets whether the column is not null.
      *
      * @param bool $flag
      *
@@ -915,7 +926,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Sets whether or not the column is used as the primary string.
+     * Sets whether the column is used as the primary string.
      *
      * The primary string is the value used by default in the magic
      * __toString method of an active record object.
@@ -941,7 +952,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Sets whether or not the column is a primary key.
+     * Sets whether the column is a primary key.
      *
      * @param bool $flag
      *
@@ -953,7 +964,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not the column is the primary key.
+     * Returns whether the column is the primary key.
      *
      * @return bool
      */
@@ -963,7 +974,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Sets whether or not the column is a node key of a tree.
+     * Sets whether the column is a node key of a tree.
      *
      * @param bool $isNodeKey
      *
@@ -975,7 +986,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not the column is a node key of a tree.
+     * Returns whether the column is a node key of a tree.
      *
      * @return bool
      */
@@ -1007,7 +1018,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Sets whether or not the column is the nested set left key of a tree.
+     * Sets whether the column is the nested set left key of a tree.
      *
      * @param bool $isNestedSetLeftKey
      *
@@ -1019,7 +1030,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not the column is a nested set key of a tree.
+     * Returns whether the column is a nested set key of a tree.
      *
      * @return bool
      */
@@ -1041,7 +1052,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Return whether or not the column is a nested set right key of a tree.
+     * Return whether the column is a nested set right key of a tree.
      *
      * @return bool
      */
@@ -1051,7 +1062,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Sets whether or not the column is the scope key of a tree.
+     * Sets whether the column is the scope key of a tree.
      *
      * @param bool $isTreeScopeKey
      *
@@ -1063,7 +1074,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not the column is a scope key of a tree.
+     * Returns whether the column is a scope key of a tree.
      *
      * @return bool
      */
@@ -1073,7 +1084,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not the column must have a unique index.
+     * Returns whether the column must have a unique index.
      *
      * @return bool
      */
@@ -1093,7 +1104,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not this column is a foreign key.
+     * Returns whether this column is a foreign key.
      *
      * @return bool
      */
@@ -1103,7 +1114,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not this column is part of more than one foreign key.
+     * Returns whether this column is part of more than one foreign key.
      *
      * @return bool
      */
@@ -1117,7 +1128,7 @@ class Column extends MappingModel
      *
      * Only if it is a foreign key or part of a foreign key.
      *
-     * @return \Propel\Generator\Model\ForeignKey[]
+     * @return array<\Propel\Generator\Model\ForeignKey>
      */
     public function getForeignKeys()
     {
@@ -1139,7 +1150,7 @@ class Column extends MappingModel
     /**
      * Returns the list of references to this column.
      *
-     * @return \Propel\Generator\Model\ForeignKey[]
+     * @return array<\Propel\Generator\Model\ForeignKey>
      */
     public function getReferrers()
     {
@@ -1147,7 +1158,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not this column has referers.
+     * Returns whether this column has referers.
      *
      * @return bool
      */
@@ -1157,7 +1168,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not this column has a specific referrer for a
+     * Returns whether this column has a specific referrer for a
      * specific foreign key object.
      *
      * @param \Propel\Generator\Model\ForeignKey $fk
@@ -1217,7 +1228,7 @@ class Column extends MappingModel
     {
         $this->getDomain()->setType($mappingType);
 
-        if (in_array($mappingType, [ PropelTypes::VARBINARY, PropelTypes::LONGVARBINARY, PropelTypes::BLOB ])) {
+        if (in_array($mappingType, [PropelTypes::VARBINARY, PropelTypes::LONGVARBINARY, PropelTypes::BLOB], true)) {
             $this->needsTransactionInPostgres = true;
         }
     }
@@ -1229,7 +1240,7 @@ class Column extends MappingModel
      *
      * @return string
      */
-    public function getType()
+    public function getType(): string
     {
         return $this->getDomain()->getType();
     }
@@ -1265,7 +1276,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not this column is a blob/lob type.
+     * Returns whether this column is a blob/lob type.
      *
      * @return bool
      */
@@ -1275,7 +1286,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not this column is a text type.
+     * Returns whether this column is a text type.
      *
      * @return bool
      */
@@ -1285,7 +1296,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not this column is a numeric type.
+     * Returns whether this column is a numeric type.
      *
      * @return bool
      */
@@ -1295,7 +1306,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not this column is a boolean type.
+     * Returns whether this column is a boolean type.
      *
      * @return bool
      */
@@ -1305,7 +1316,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not this column is a temporal type.
+     * Returns whether this column is a temporal type.
      *
      * @return bool
      */
@@ -1315,7 +1326,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not the column is an array column.
+     * Returns whether the column is an array column.
      *
      * @return bool
      */
@@ -1325,7 +1336,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not this column is an ENUM or SET column.
+     * Returns whether this column is an ENUM or SET column.
      *
      * @return bool
      */
@@ -1335,7 +1346,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not this column is an ENUM column.
+     * Returns whether this column is an ENUM column.
      *
      * @return bool
      */
@@ -1345,7 +1356,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not this column is a SET column.
+     * Returns whether this column is a SET column.
      *
      * @return bool
      */
@@ -1357,7 +1368,7 @@ class Column extends MappingModel
     /**
      * Sets the list of possible values for an ENUM or SET column.
      *
-     * @param string|string[] $valueSet
+     * @param array<string>|string $valueSet
      *
      * @return void
      */
@@ -1374,7 +1385,7 @@ class Column extends MappingModel
     /**
      * Returns the list of possible values for an ENUM or SET column.
      *
-     * @return string[]
+     * @return array<string>
      */
     public function getValueSet()
     {
@@ -1528,7 +1539,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Return whether or not the column has to be lazy loaded.
+     * Return whether the column has to be lazy loaded.
      *
      * For example, if a runtime query on the table doesn't hydrate this column
      * but a getter does.
@@ -1557,7 +1568,7 @@ class Column extends MappingModel
             throw new EngineException(sprintf(
                 'You have specified autoIncrement for column "%s", but you have not specified idMethod="native" for table "%s".',
                 $this->name,
-                $this->parentTable->getName()
+                $this->parentTable->getName(),
             ));
         }
 
@@ -1565,7 +1576,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Sets whether or not this column is an auto incremented value.
+     * Sets whether this column is an auto incremented value.
      *
      * Use isAutoIncrement() to find out if it is set or not.
      *
@@ -1591,7 +1602,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not the column PHP native type is primitive type (aka
+     * Returns whether the column PHP native type is primitive type (aka
      * a boolean, an integer, a long, a float, a double or a string).
      *
      * @see PropelTypes::isPhpPrimitiveType()
@@ -1604,7 +1615,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not the column PHP native type is a primitive numeric
+     * Returns whether the column PHP native type is a primitive numeric
      * type (aka an integer, a long, a float or a double).
      *
      * @see PropelTypes::isPhpPrimitiveNumericType()
@@ -1617,7 +1628,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not the column PHP native type is an object.
+     * Returns whether the column PHP native type is an object.
      *
      * @see PropelTypes::isPhpObjectType()
      *
@@ -1639,7 +1650,7 @@ class Column extends MappingModel
     }
 
     /**
-     * Returns whether or not this column has a platform adapter.
+     * Returns whether this column has a platform adapter.
      *
      * @return bool
      */
@@ -1676,7 +1687,7 @@ class Column extends MappingModel
      */
     public static function generatePhpName($name, $phpNamingMethod = PhpNameGenerator::CONV_METHOD_CLEAN, $namePrefix = null)
     {
-        return NameFactory::generateName(NameFactory::PHP_GENERATOR, [ $name, $phpNamingMethod, $namePrefix ]);
+        return NameFactory::generateName(NameFactory::PHP_GENERATOR, [$name, $phpNamingMethod, (string)$namePrefix]);
     }
 
     /**

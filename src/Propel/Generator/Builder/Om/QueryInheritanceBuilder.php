@@ -46,15 +46,15 @@ class QueryInheritanceBuilder extends AbstractOMBuilder
      */
     public function getPackage()
     {
-        return ($this->getChild()->getPackage() ? $this->getChild()->getPackage() : parent::getPackage()) . '.Base';
+        return ($this->getChild()->getPackage() ?: parent::getPackage()) . '.Base';
     }
 
     /**
      * Gets the namespace for the [base] object classes.
      *
-     * @return string
+     * @return string|null
      */
-    public function getNamespace()
+    public function getNamespace(): ?string
     {
         if ($namespace = parent::getNamespace()) {
             return $namespace . '\\Base';
@@ -175,7 +175,7 @@ class " . $this->getUnqualifiedClassName() . ' extends ' . $baseClassName . "
         $this->declareClassFromBuilder($this->getTableMapBuilder());
         $this->declareClasses(
             '\Propel\Runtime\Connection\ConnectionInterface',
-            '\Propel\Runtime\ActiveQuery\Criteria'
+            '\Propel\Runtime\ActiveQuery\Criteria',
         );
         $this->addFactory($script);
         $this->addPreSelect($script);

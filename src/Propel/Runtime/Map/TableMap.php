@@ -13,7 +13,6 @@ use Propel\Runtime\Collection\Collection;
 use Propel\Runtime\Collection\ObjectCollection;
 use Propel\Runtime\Map\Exception\ColumnNotFoundException;
 use Propel\Runtime\Map\Exception\RelationNotFoundException;
-use Propel\Runtime\Propel;
 
 /**
  * TableMap is used to model a table in a database.
@@ -28,51 +27,61 @@ class TableMap
     /**
      * phpname type
      * e.g. 'AuthorId'
+     *
+     * @var string
      */
     public const TYPE_PHPNAME = 'phpName';
 
     /**
      * camelCase type
      * e.g. 'authorId'
+     *
+     * @var string
      */
     public const TYPE_CAMELNAME = 'camelName';
 
     /**
      * column (tableMap) name type
      * e.g. 'book.AUTHOR_ID'
+     *
+     * @var string
      */
     public const TYPE_COLNAME = 'colName';
 
     /**
      * column fieldname type
      * e.g. 'author_id'
+     *
+     * @var string
      */
     public const TYPE_FIELDNAME = 'fieldName';
 
     /**
      * num type
      * simply the numerical array index, e.g. 4
+     *
+     * @var string
      */
     public const TYPE_NUM = 'num';
 
     /**
      * Columns in the table
      *
-     * @var \Propel\Runtime\Map\ColumnMap[]
+     * @var array<\Propel\Runtime\Map\ColumnMap>
      */
     protected $columns = [];
 
     /**
      * Columns in the table, using table phpName as key
      *
-     * @var \Propel\Runtime\Map\ColumnMap[]
+     * @var array<\Propel\Runtime\Map\ColumnMap>
      */
     protected $columnsByPhpName = [];
 
     /**
      * Map of normalized column names
      *
-     * @var string[]
+     * @var array<string>
      */
     protected $normalizedColumnNameMap = [];
 
@@ -85,10 +94,8 @@ class TableMap
 
     /**
      * The name of the table
-     *
-     * @var string
      */
-    protected $tableName;
+    protected ?string $tableName = null;
 
     /**
      * The PHP name of the table
@@ -135,21 +142,21 @@ class TableMap
     /**
      * The primary key columns in the table
      *
-     * @var \Propel\Runtime\Map\ColumnMap[]
+     * @var array<\Propel\Runtime\Map\ColumnMap>
      */
     protected $primaryKeys = [];
 
     /**
      * The foreign key columns in the table
      *
-     * @var \Propel\Runtime\Map\ColumnMap[]
+     * @var array<\Propel\Runtime\Map\ColumnMap>
      */
     protected $foreignKeys = [];
 
     /**
      *  The relationships in the table
      *
-     * @var \Propel\Runtime\Map\RelationMap[]
+     * @var array<\Propel\Runtime\Map\RelationMap>
      */
     protected $relations = [];
 
@@ -178,14 +185,16 @@ class TableMap
      * @param string|null $name
      * @param \Propel\Runtime\Map\DatabaseMap|null $dbMap
      */
-    public function __construct($name = null, $dbMap = null)
+    public function __construct(?string $name = null, ?DatabaseMap $dbMap = null)
     {
         if ($name !== null) {
             $this->setName($name);
         }
+
         if ($dbMap !== null) {
             $this->setDatabaseMap($dbMap);
         }
+
         $this->initialize();
     }
 
@@ -224,11 +233,11 @@ class TableMap
     /**
      * Set the name of the Table.
      *
-     * @param string $name The name of the table.
+     * @param string|null $name The name of the table.
      *
      * @return void
      */
-    public function setName($name)
+    public function setName(?string $name)
     {
         $this->tableName = $name;
     }
@@ -236,9 +245,9 @@ class TableMap
     /**
      * Get the name of the Table.
      *
-     * @return string A String with the name of the table.
+     * @return string|null A String with the name of the table.
      */
-    public function getName()
+    public function getName(): ?string
     {
         return $this->tableName;
     }
@@ -326,7 +335,7 @@ class TableMap
     }
 
     /**
-     * Set whether or not to use Id generator for primary key.
+     * Set whether to use Id generator for primary key.
      *
      * @param bool $bit
      *
@@ -348,7 +357,7 @@ class TableMap
     }
 
     /**
-     * Set whether or not to this table uses single table inheritance
+     * Set whether to this table uses single table inheritance
      *
      * @param bool $bit
      *
@@ -389,35 +398,6 @@ class TableMap
     public function getPrimaryKeyMethodInfo()
     {
         return $this->pkInfo;
-    }
-
-    /**
-     * Helper method which returns the primary key contained
-     * in the given Criteria object.
-     *
-     * @param \Propel\Runtime\ActiveQuery\Criteria $criteria A Criteria.
-     *
-     * @return \Propel\Runtime\Map\ColumnMap If the Criteria object contains a primary key, or null if it doesn't.
-     */
-    private static function getPrimaryKey(Criteria $criteria)
-    {
-        // Assume all the keys are for the same table.
-        $keys = $criteria->keys();
-        $key = $keys[0];
-        $table = $criteria->getTableName($key);
-
-        $pk = null;
-
-        if (!empty($table)) {
-            $dbMap = Propel::getServiceContainer()->getDatabaseMap($criteria->getDbName());
-
-            $pks = $dbMap->getTable($table)->getPrimaryKeys();
-            if (!empty($pks)) {
-                $pk = array_shift($pks);
-            }
-        }
-
-        return $pk;
     }
 
     /**
@@ -581,7 +561,7 @@ class TableMap
     /**
      * Get a ColumnMap[] of the columns in this table.
      *
-     * @return \Propel\Runtime\Map\ColumnMap[]
+     * @return array<\Propel\Runtime\Map\ColumnMap>
      */
     public function getColumns()
     {
@@ -666,7 +646,7 @@ class TableMap
     /**
      * Returns array of ColumnMap objects that make up the primary key for this table
      *
-     * @return \Propel\Runtime\Map\ColumnMap[]
+     * @return array<\Propel\Runtime\Map\ColumnMap>
      */
     public function getPrimaryKeys()
     {
@@ -676,7 +656,7 @@ class TableMap
     /**
      * Returns array of ColumnMap objects that are foreign keys for this table
      *
-     * @return \Propel\Runtime\Map\ColumnMap[]
+     * @return array<\Propel\Runtime\Map\ColumnMap>
      */
     public function getForeignKeys()
     {
@@ -742,7 +722,7 @@ class TableMap
             [$local, $foreign] = $map;
             $relation->addColumnMapping(
                 $this->getColumnOrValue($local, $relation->getLocalTable()),
-                $this->getColumnOrValue($foreign, $relation->getForeignTable())
+                $this->getColumnOrValue($foreign, $relation->getForeignTable()),
             );
         }
         $this->relations[$name] = $relation;
@@ -801,7 +781,7 @@ class TableMap
      * Gets the RelationMap objects of the table
      * This method will build the relations if they are not built yet
      *
-     * @return \Propel\Runtime\Map\RelationMap[] list of RelationMap objects
+     * @return array<\Propel\Runtime\Map\RelationMap> list of RelationMap objects
      */
     public function getRelations()
     {
@@ -855,7 +835,7 @@ class TableMap
      *
      * @return mixed
      */
-    public static function getFieldnamesForClass($classname, $type = TableMap::TYPE_PHPNAME)
+    public static function getFieldnamesForClass($classname, $type = self::TYPE_PHPNAME)
     {
         return ($classname::TABLE_MAP)::getFieldnames($type);
     }

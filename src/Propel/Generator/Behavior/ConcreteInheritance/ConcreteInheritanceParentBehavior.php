@@ -27,7 +27,7 @@ class ConcreteInheritanceParentBehavior extends Behavior
     /**
      * Default parameters value
      *
-     * @var string[]
+     * @var array<string>
      */
     protected $parameters = [
         'descendant_column' => 'descendant_class',
@@ -81,7 +81,7 @@ class ConcreteInheritanceParentBehavior extends Behavior
     {
         $script .= "
 /**
- * Whether or not this object is the parent of a child object
+ * Whether this object is the parent of a child object
  *
  * @return    bool
  */
