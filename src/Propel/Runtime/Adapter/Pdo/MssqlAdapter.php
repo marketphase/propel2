@@ -34,7 +34,7 @@ class MssqlAdapter extends PdoAdapter implements SqlAdapterInterface
      *
      * @return void
      */
-    public function setCharset(ConnectionInterface $con, $charset)
+    public function setCharset(ConnectionInterface $con, $charset): void
     {
     }
 
@@ -46,7 +46,7 @@ class MssqlAdapter extends PdoAdapter implements SqlAdapterInterface
      *
      * @return string
      */
-    public function concatString($s1, $s2)
+    public function concatString($s1, $s2): string
     {
         return '(' . $s1 . ' + ' . $s2 . ')';
     }
@@ -60,7 +60,7 @@ class MssqlAdapter extends PdoAdapter implements SqlAdapterInterface
      *
      * @return string
      */
-    public function subString($s, $pos, $len)
+    public function subString($s, $pos, $len): string
     {
         return 'SUBSTRING(' . $s . ', ' . $pos . ', ' . $len . ')';
     }
@@ -72,7 +72,7 @@ class MssqlAdapter extends PdoAdapter implements SqlAdapterInterface
      *
      * @return string
      */
-    public function strLength($s)
+    public function strLength($s): string
     {
         return 'LEN(' . $s . ')';
     }
@@ -80,7 +80,7 @@ class MssqlAdapter extends PdoAdapter implements SqlAdapterInterface
     /**
      * @inheritDoc
      */
-    public function compareRegex($left, $right)
+    public function compareRegex($left, $right): string
     {
         return sprintf('dbo.RegexMatch(%s, %s', $left, $right);
     }
@@ -92,7 +92,7 @@ class MssqlAdapter extends PdoAdapter implements SqlAdapterInterface
      *
      * @return string
      */
-    public function quoteIdentifier($text)
+    public function quoteIdentifier($text): string
     {
         return '[' . $text . ']';
     }
@@ -104,7 +104,7 @@ class MssqlAdapter extends PdoAdapter implements SqlAdapterInterface
      *
      * @return string
      */
-    public function quoteIdentifierTable($table)
+    public function quoteIdentifierTable($table): string
     {
         // e.g. 'database.table alias' should be escaped as '[database].[table] [alias]'
         return '[' . strtr($table, ['.' => '].[', ' ' => '] [']) . ']';
@@ -117,7 +117,7 @@ class MssqlAdapter extends PdoAdapter implements SqlAdapterInterface
      *
      * @return string
      */
-    public function random($seed = null)
+    public function random($seed = null): string
     {
         return 'RAND(' . ((int)$seed) . ')';
     }
@@ -143,7 +143,7 @@ class MssqlAdapter extends PdoAdapter implements SqlAdapterInterface
      *
      * @return void
      */
-    public function applyLimit(&$sql, $offset, $limit, $criteria = null)
+    public function applyLimit(&$sql, $offset, $limit, $criteria = null): void
     {
         // make sure offset and limit are numeric
         if (!is_numeric($offset) || !is_numeric($limit)) {
@@ -176,7 +176,7 @@ class MssqlAdapter extends PdoAdapter implements SqlAdapterInterface
             }
         }
 
-        if (empty($selectStatement) || empty($fromStatement)) {
+        if (!$selectStatement || !$fromStatement) {
             throw new MalformedClauseException('MssqlAdapter::applyLimit() could not locate the select statement at the start of the query.');
         }
 
@@ -217,6 +217,7 @@ class MssqlAdapter extends PdoAdapter implements SqlAdapterInterface
         // setup inner and outer select selects
         $innerSelect = '';
         $outerSelect = '';
+        $firstColumnOrderStatement = null;
         foreach (explode(', ', $selectStatement) as $selCol) {
             $selColArr = explode(' ', $selCol);
             $selColCount = count($selColArr) - 1;
@@ -235,7 +236,7 @@ class MssqlAdapter extends PdoAdapter implements SqlAdapterInterface
                 }
 
                 // save the first non-aggregate column for use in ROW_NUMBER() if required
-                if (!isset($firstColumnOrderStatement)) {
+                if ($firstColumnOrderStatement === null) {
                     $firstColumnOrderStatement = 'ORDER BY ' . $selColArr[0];
                 }
 
@@ -269,7 +270,7 @@ class MssqlAdapter extends PdoAdapter implements SqlAdapterInterface
             $orderStatement = 'ORDER BY ' . implode(', ', $orders);
         } else {
             // use the first non aggregate column in our select statement if no ORDER BY clause present
-            if (isset($firstColumnOrderStatement)) {
+            if ($firstColumnOrderStatement !== null) {
                 $orderStatement = $firstColumnOrderStatement;
             } else {
                 throw new ColumnNotFoundException('MssqlAdapter::applyLimit() unable to find column to use with ROW_NUMBER()');
@@ -295,7 +296,7 @@ class MssqlAdapter extends PdoAdapter implements SqlAdapterInterface
      *
      * @return void
      */
-    public function cleanupSQL(&$sql, array &$params, Criteria $values, DatabaseMap $dbMap)
+    public function cleanupSQL(&$sql, array &$params, Criteria $values, DatabaseMap $dbMap): void
     {
         $i = 1;
         $paramCols = [];

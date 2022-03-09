@@ -29,12 +29,8 @@ class PropelConfiguration implements ConfigurationInterface
     {
         $treeBuilder = new TreeBuilder('propel');
 
-        if (method_exists($treeBuilder, 'getRootNode')) {
-            $rootNode = $treeBuilder->getRootNode();
-        } else {
-            // BC layer for symfony/config 4.1 and older
-            $rootNode = $treeBuilder->root('propel');
-        }
+        /** @var \Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition $rootNode */
+        $rootNode = $treeBuilder->getRootNode();
 
         $this->addGeneralSection($rootNode);
         $this->addExcludeTablesSection($rootNode);
@@ -53,7 +49,7 @@ class PropelConfiguration implements ConfigurationInterface
      *
      * @return void
      */
-    protected function addGeneralSection(ArrayNodeDefinition $node)
+    protected function addGeneralSection(ArrayNodeDefinition $node): void
     {
         $node
             ->children()
@@ -72,7 +68,7 @@ class PropelConfiguration implements ConfigurationInterface
      *
      * @return void
      */
-    protected function addPathsSection(ArrayNodeDefinition $node)
+    protected function addPathsSection(ArrayNodeDefinition $node): void
     {
         $node
             ->children()
@@ -98,7 +94,7 @@ class PropelConfiguration implements ConfigurationInterface
      *
      * @return void
      */
-    protected function addDatabaseSection(ArrayNodeDefinition $node)
+    protected function addDatabaseSection(ArrayNodeDefinition $node): void
     {
         $node
             ->children()
@@ -211,7 +207,7 @@ class PropelConfiguration implements ConfigurationInterface
      *
      * @return void
      */
-    protected function addMigrationsSection(ArrayNodeDefinition $node)
+    protected function addMigrationsSection(ArrayNodeDefinition $node): void
     {
         $node
             ->children()
@@ -232,7 +228,7 @@ class PropelConfiguration implements ConfigurationInterface
      *
      * @return void
      */
-    protected function addReverseSection(ArrayNodeDefinition $node)
+    protected function addReverseSection(ArrayNodeDefinition $node): void
     {
         $node
             ->children()
@@ -250,7 +246,7 @@ class PropelConfiguration implements ConfigurationInterface
      *
      * @return void
      */
-    protected function addExcludeTablesSection(ArrayNodeDefinition $node)
+    protected function addExcludeTablesSection(ArrayNodeDefinition $node): void
     {
         $node
             ->children()
@@ -265,7 +261,7 @@ class PropelConfiguration implements ConfigurationInterface
      *
      * @return void
      */
-    protected function addRuntimeSection(ArrayNodeDefinition $node)
+    protected function addRuntimeSection(ArrayNodeDefinition $node): void
     {
         $node
             ->children()
@@ -343,7 +339,7 @@ class PropelConfiguration implements ConfigurationInterface
      *
      * @return void
      */
-    protected function addGeneratorSection(ArrayNodeDefinition $node)
+    protected function addGeneratorSection(ArrayNodeDefinition $node): void
     {
         $node
             ->children()

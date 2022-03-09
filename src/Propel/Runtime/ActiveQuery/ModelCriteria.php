@@ -8,6 +8,7 @@
 
 namespace Propel\Runtime\ActiveQuery;
 
+use Exception;
 use Propel\Common\Exception\SetColumnConverterException;
 use Propel\Common\Util\SetColumnConverter;
 use Propel\Generator\Model\PropelTypes;
@@ -25,9 +26,11 @@ use Propel\Runtime\ActiveQuery\Exception\UnknownColumnException;
 use Propel\Runtime\ActiveQuery\Exception\UnknownModelException;
 use Propel\Runtime\ActiveQuery\Exception\UnknownRelationException;
 use Propel\Runtime\Connection\ConnectionInterface;
+use Propel\Runtime\DataFetcher\DataFetcherInterface;
 use Propel\Runtime\Exception\ClassNotFoundException;
 use Propel\Runtime\Exception\LogicException;
 use Propel\Runtime\Exception\PropelException;
+use Propel\Runtime\Exception\RuntimeException;
 use Propel\Runtime\Exception\UnexpectedValueException;
 use Propel\Runtime\Formatter\SimpleArrayFormatter;
 use Propel\Runtime\Map\ColumnMap;
@@ -77,6 +80,11 @@ class ModelCriteria extends BaseModelCriteria
      * @var \Propel\Runtime\ActiveQuery\ModelCriteria|null
      */
     protected $primaryCriteria;
+
+    /**
+     * @var string|null
+     */
+    protected $entityNotFoundExceptionClass;
 
     /**
      * @var bool
@@ -251,13 +259,15 @@ class ModelCriteria extends BaseModelCriteria
      * @param \Propel\Runtime\ActiveQuery\ModelCriteria $existsQueryCriteria the query object used in the EXISTS statement
      * @param string $type Either ExistsCriterion::TYPE_EXISTS or ExistsCriterion::TYPE_NOT_EXISTS. Defaults to EXISTS
      *
-     * @return \Propel\Runtime\ActiveQuery\ModelCriteria*
+     * @return $this
      */
     public function whereExists($existsQueryCriteria, string $type = ExistsCriterion::TYPE_EXISTS)
     {
         $criterion = new ExistsCriterion($this, $existsQueryCriteria, $type);
 
-        return $this->addUsingOperator($criterion);
+        $this->addUsingOperator($criterion);
+
+        return $this;
     }
 
     /**
@@ -265,11 +275,13 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @param \Propel\Runtime\ActiveQuery\ModelCriteria $existsQueryCriteria
      *
-     * @return \Propel\Runtime\ActiveQuery\ModelCriteria
+     * @return $this
      */
     public function whereNotExists($existsQueryCriteria)
     {
-        return $this->whereExists($existsQueryCriteria, ExistsCriterion::TYPE_NOT_EXISTS);
+        $this->whereExists($existsQueryCriteria, ExistsCriterion::TYPE_NOT_EXISTS);
+
+        return $this;
     }
 
     /**
@@ -365,7 +377,7 @@ class ModelCriteria extends BaseModelCriteria
      */
     public function groupBy($columnName)
     {
-        if (empty($columnName)) {
+        if (!$columnName) {
             throw new PropelException('You must ask for at least one column');
         }
 
@@ -488,7 +500,7 @@ class ModelCriteria extends BaseModelCriteria
      */
     public function select($columnArray)
     {
-        if (empty($columnArray)) {
+        if (!$columnArray) {
             throw new PropelException('You must ask for at least one column');
         }
 
@@ -522,7 +534,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @see select()
      *
-     * @return array|string A list of column names (e.g. array('Title', 'Category.Name', 'c.Content')) or a single column name (e.g. 'Name')
+     * @return array<string>|string|null A list of column names (e.g. array('Title', 'Category.Name', 'c.Content')) or a single column name (e.g. 'Name')
      */
     public function getSelect()
     {
@@ -533,9 +545,9 @@ class ModelCriteria extends BaseModelCriteria
      * This method returns the previousJoin for this ModelCriteria,
      * by default this is null, but after useQuery this is set the to the join of that use
      *
-     * @return \Propel\Runtime\ActiveQuery\Join the previousJoin for this ModelCriteria
+     * @return \Propel\Runtime\ActiveQuery\Join|null the previousJoin for this ModelCriteria
      */
-    public function getPreviousJoin()
+    public function getPreviousJoin(): ?Join
     {
         return $this->previousJoin;
     }
@@ -548,7 +560,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return void
      */
-    public function setPreviousJoin(Join $previousJoin)
+    public function setPreviousJoin(Join $previousJoin): void
     {
         $this->previousJoin = $previousJoin;
     }
@@ -803,7 +815,7 @@ class ModelCriteria extends BaseModelCriteria
     /**
      * @return bool
      */
-    public function isWithOneToMany()
+    public function isWithOneToMany(): bool
     {
         return $this->isWithOneToMany;
     }
@@ -849,9 +861,9 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @throws \Propel\Runtime\Exception\PropelException
      *
-     * @return \Propel\Runtime\ActiveQuery\ModelCriteria The secondary criteria object
+     * @return self The secondary criteria object
      */
-    public function useQuery($relationName, $secondaryCriteriaClass = null)
+    public function useQuery($relationName, $secondaryCriteriaClass = null): self
     {
         if (!isset($this->joins[$relationName])) {
             throw new PropelException('Unknown class or alias ' . $relationName);
@@ -880,9 +892,11 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @see Criteria::mergeWith()
      *
-     * @return \Propel\Runtime\ActiveQuery\ModelCriteria The primary criteria object
+     * @throws \Propel\Runtime\Exception\RuntimeException
+     *
+     * @return self|null The primary criteria object
      */
-    public function endUse()
+    public function endUse(): ?self
     {
         if ($this->isExistsQuery) {
             return $this->getPrimaryCriteria();
@@ -893,6 +907,10 @@ class ModelCriteria extends BaseModelCriteria
         }
 
         $primaryCriteria = $this->getPrimaryCriteria();
+        if ($primaryCriteria === null) {
+            throw new RuntimeException('No primary criteria');
+        }
+
         $primaryCriteria->mergeWith($this);
 
         return $primaryCriteria;
@@ -908,10 +926,14 @@ class ModelCriteria extends BaseModelCriteria
      * @param string|null $queryClass allows to use a custom query class for the exists query, like ExtendedBookQuery::class
      * @param string $type Either ExistsCriterion::TYPE_EXISTS or ExistsCriterion::TYPE_NOT_EXISTS. Defaults to EXISTS
      *
-     * @return \Propel\Runtime\ActiveQuery\ModelCriteria
+     * @return self
      */
-    public function useExistsQuery(string $relationName, ?string $modelAlias = null, ?string $queryClass = null, string $type = ExistsCriterion::TYPE_EXISTS)
-    {
+    public function useExistsQuery(
+        string $relationName,
+        ?string $modelAlias = null,
+        ?string $queryClass = null,
+        string $type = ExistsCriterion::TYPE_EXISTS
+    ): self {
         $relationMap = $this->getTableMap()->getRelation($relationName);
         $className = $relationMap->getRightTable()->getClassName();
 
@@ -937,9 +959,9 @@ class ModelCriteria extends BaseModelCriteria
      * @param string|null $modelAlias sets an alias for the nested query
      * @param string|null $queryClass allows to use a custom query class for the exists query, like ExtendedBookQuery::class
      *
-     * @return \Propel\Runtime\ActiveQuery\ModelCriteria
+     * @return self
      */
-    public function useNotExistsQuery(string $relationName, ?string $modelAlias = null, ?string $queryClass = null)
+    public function useNotExistsQuery(string $relationName, ?string $modelAlias = null, ?string $queryClass = null): self
     {
         return $this->useExistsQuery($relationName, $modelAlias, $queryClass, ExistsCriterion::TYPE_NOT_EXISTS);
     }
@@ -984,9 +1006,9 @@ class ModelCriteria extends BaseModelCriteria
      * Clear the conditions to allow the reuse of the query object.
      * The ModelCriteria's Model and alias 'all the properties set by construct) will remain.
      *
-     * @return $this The primary criteria object
+     * @return void
      */
-    public function clear()
+    public function clear(): void
     {
         parent::clear();
 
@@ -995,8 +1017,6 @@ class ModelCriteria extends BaseModelCriteria
         $this->formatter = null;
         $this->select = null;
         $this->isSelfSelected = false;
-
-        return $this;
     }
 
     /**
@@ -1007,7 +1027,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return void
      */
-    public function setPrimaryCriteria(ModelCriteria $criteria, Join $previousJoin)
+    public function setPrimaryCriteria(ModelCriteria $criteria, Join $previousJoin): void
     {
         $this->primaryCriteria = $criteria;
         $this->setPreviousJoin($previousJoin);
@@ -1018,7 +1038,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return \Propel\Runtime\ActiveQuery\ModelCriteria|null The primary criteria
      */
-    public function getPrimaryCriteria()
+    public function getPrimaryCriteria(): ?self
     {
         return $this->primaryCriteria;
     }
@@ -1128,7 +1148,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return bool
      */
-    public function isSelfColumnsSelected()
+    public function isSelfColumnsSelected(): bool
     {
         return $this->isSelfSelected;
     }
@@ -1158,7 +1178,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return array list($className, $aliasName)
      */
-    public static function getClassAndAlias($class)
+    public static function getClassAndAlias($class): array
     {
         if (strpos($class, ' ') !== false) {
             [$class, $alias] = explode(' ', $class);
@@ -1180,7 +1200,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return string the relationName used in the join
      */
-    public static function getRelationName($relation)
+    public static function getRelationName($relation): string
     {
         // get the relationName
         [$fullName, $relationAlias] = self::getClassAndAlias($relation);
@@ -1217,7 +1237,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return bool true if cloning must be done before termination
      */
-    public function isKeepQuery()
+    public function isKeepQuery(): bool
     {
         return $this->isKeepQuery;
     }
@@ -1229,7 +1249,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return void
      */
-    protected function basePreSelect(ConnectionInterface $con)
+    protected function basePreSelect(ConnectionInterface $con): void
     {
         $this->preSelect($con);
     }
@@ -1239,7 +1259,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return void
      */
-    protected function preSelect(ConnectionInterface $con)
+    protected function preSelect(ConnectionInterface $con): void
     {
     }
 
@@ -1412,9 +1432,9 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return \Exception
      */
-    private function createEntityNotFoundException()
+    private function createEntityNotFoundException(): Exception
     {
-        if (!isset($this->entityNotFoundExceptionClass)) {
+        if ($this->entityNotFoundExceptionClass === null) {
             throw new PropelException('Please define a entityNotFoundExceptionClass property with the name of your NotFoundException-class in ' . static::class);
         }
 
@@ -1440,6 +1460,7 @@ class ModelCriteria extends BaseModelCriteria
 
         $ret = $this->findOne($con);
         if (!$ret) {
+            /** @var class-string $class */
             $class = $this->getModelName();
             $obj = new $class();
             foreach ($this->keys() as $key) {
@@ -1626,7 +1647,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return int the number of results
      */
-    public function count(?ConnectionInterface $con = null)
+    public function count(?ConnectionInterface $con = null): int
     {
         if ($con === null) {
             $con = Propel::getServiceContainer()->getReadConnection($this->getDbName());
@@ -1654,7 +1675,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return \Propel\Runtime\DataFetcher\DataFetcherInterface
      */
-    public function doCount(?ConnectionInterface $con = null)
+    public function doCount(?ConnectionInterface $con = null): DataFetcherInterface
     {
         $this->configureSelectColumns();
 
@@ -1673,7 +1694,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return bool column existence
      */
-    public function exists(?ConnectionInterface $con = null)
+    public function exists(?ConnectionInterface $con = null): bool
     {
         if ($con === null) {
             $con = Propel::getServiceContainer()->getReadConnection($this->getDbName());
@@ -1705,7 +1726,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return \Propel\Runtime\Util\PropelModelPager a pager object, supporting iteration
      */
-    public function paginate($page = 1, $maxPerPage = 10, ?ConnectionInterface $con = null)
+    public function paginate($page = 1, $maxPerPage = 10, ?ConnectionInterface $con = null): PropelModelPager
     {
         $criteria = $this->isKeepQuery() ? clone $this : $this;
         $pager = new PropelModelPager($criteria, $maxPerPage);
@@ -1720,9 +1741,9 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @param \Propel\Runtime\Connection\ConnectionInterface $con The connection object used by the query
      *
-     * @return int
+     * @return int|null
      */
-    protected function basePreDelete(ConnectionInterface $con)
+    protected function basePreDelete(ConnectionInterface $con): ?int
     {
         return $this->preDelete($con);
     }
@@ -1732,7 +1753,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return int|null
      */
-    protected function preDelete(ConnectionInterface $con)
+    protected function preDelete(ConnectionInterface $con): ?int
     {
         return null;
     }
@@ -1743,9 +1764,9 @@ class ModelCriteria extends BaseModelCriteria
      * @param int $affectedRows the number of deleted rows
      * @param \Propel\Runtime\Connection\ConnectionInterface $con The connection object used by the query
      *
-     * @return int
+     * @return int|null
      */
-    protected function basePostDelete($affectedRows, ConnectionInterface $con)
+    protected function basePostDelete($affectedRows, ConnectionInterface $con): ?int
     {
         return $this->postDelete($affectedRows, $con);
     }
@@ -1756,7 +1777,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return int|null
      */
-    protected function postDelete($affectedRows, ConnectionInterface $con)
+    protected function postDelete($affectedRows, ConnectionInterface $con): ?int
     {
         return null;
     }
@@ -1771,7 +1792,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return int the number of deleted rows
      */
-    public function delete(?ConnectionInterface $con = null)
+    public function delete(?ConnectionInterface $con = null): int
     {
         if (count($this->getMap()) === 0) {
             throw new PropelException(__METHOD__ . ' expects a Criteria with at least one condition. Use deleteAll() to delete all the rows of a table');
@@ -1809,7 +1830,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return int the number of deleted rows
      */
-    public function deleteAll(?ConnectionInterface $con = null)
+    public function deleteAll(?ConnectionInterface $con = null): int
     {
         if ($con === null) {
             $con = Propel::getServiceContainer()->getWriteConnection($this->getDbName());
@@ -1837,7 +1858,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return int|null
      */
-    protected function basePreUpdate(&$values, ConnectionInterface $con, $forceIndividualSaves = false)
+    protected function basePreUpdate(&$values, ConnectionInterface $con, $forceIndividualSaves = false): ?int
     {
         return $this->preUpdate($values, $con, $forceIndividualSaves);
     }
@@ -1849,7 +1870,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return int|null
      */
-    protected function preUpdate(&$values, ConnectionInterface $con, $forceIndividualSaves = false)
+    protected function preUpdate(&$values, ConnectionInterface $con, $forceIndividualSaves = false): ?int
     {
         return null;
     }
@@ -1862,7 +1883,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return int|null
      */
-    protected function basePostUpdate($affectedRows, ConnectionInterface $con)
+    protected function basePostUpdate($affectedRows, ConnectionInterface $con): ?int
     {
         return $this->postUpdate($affectedRows, $con);
     }
@@ -1873,7 +1894,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return int|null
      */
-    protected function postUpdate($affectedRows, ConnectionInterface $con)
+    protected function postUpdate($affectedRows, ConnectionInterface $con): ?int
     {
         return null;
     }
@@ -1893,7 +1914,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return int Number of updated rows
      */
-    public function update($values, ?ConnectionInterface $con = null, $forceIndividualSaves = false)
+    public function update($values, ?ConnectionInterface $con = null, $forceIndividualSaves = false): int
     {
         if (!is_array($values) && !($values instanceof Criteria)) {
             throw new PropelException(__METHOD__ . ' expects an array or Criteria as first argument');
@@ -1932,7 +1953,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return int Number of updated rows
      */
-    public function doUpdate($updateValues, ConnectionInterface $con, $forceIndividualSaves = false)
+    public function doUpdate($updateValues, ConnectionInterface $con, $forceIndividualSaves = false): int
     {
         if ($forceIndividualSaves) {
             // Update rows one by one
@@ -1981,7 +2002,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return \Propel\Runtime\ActiveQuery\Criterion\AbstractCriterion A Criterion or ModelCriterion object
      */
-    protected function getCriterionForConditions($conditions, $operator = null)
+    protected function getCriterionForConditions($conditions, $operator = null): AbstractCriterion
     {
         $operator = ($operator === null) ? Criteria::LOGICAL_AND : $operator;
         $this->combine($conditions, $operator, 'propel_temp_name');
@@ -2003,7 +2024,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return \Propel\Runtime\ActiveQuery\Criterion\AbstractCriterion a Criterion object
      */
-    protected function getCriterionForClause($clause, $value, $bindingType = null)
+    protected function getCriterionForClause($clause, $value, $bindingType = null): AbstractCriterion
     {
         $origin = $clause = trim($clause);
         if ($this->replaceNames($clause)) {
@@ -2097,7 +2118,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return string the column name replacement
      */
-    protected function doReplaceNameInExpression($matches)
+    protected function doReplaceNameInExpression($matches): string
     {
         $key = $matches[0];
         [$column, $realFullColumnName] = $this->getColumnFromName($key);
@@ -2142,7 +2163,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return array List($columnMap, $realColumnName)
      */
-    protected function getColumnFromName($columnName, $failSilently = true)
+    protected function getColumnFromName($columnName, $failSilently = true): array
     {
         if (strpos($columnName, '.') === false) {
             $prefix = $this->getModelAliasOrName();
@@ -2204,7 +2225,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return \Propel\Runtime\ActiveQuery\ModelJoin|null
      */
-    public function getModelJoinByTableName($tableName)
+    public function getModelJoinByTableName($tableName): ?ModelJoin
     {
         foreach ($this->joins as $join) {
             if ($join instanceof ModelJoin && $join->getTableMap()->getName() == $tableName) {
@@ -2222,7 +2243,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return \Propel\Runtime\DataFetcher\DataFetcherInterface A dataFetcher using the connection, ready to be fetched
      */
-    public function doSelect(?ConnectionInterface $con = null)
+    public function doSelect(?ConnectionInterface $con = null): DataFetcherInterface
     {
         $this->configureSelectColumns();
 
@@ -2240,7 +2261,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return string
      */
-    public function createSelectSql(&$params)
+    public function createSelectSql(&$params): string
     {
         $this->configureSelectColumns();
 
@@ -2252,7 +2273,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return void
      */
-    public function configureSelectColumns()
+    public function configureSelectColumns(): void
     {
         if (!$this->select) {
             return;
@@ -2287,7 +2308,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return array List($columnMap, $realColumnName)
      */
-    protected function getColumnFromSubQuery($class, $phpName, $failSilently = true)
+    protected function getColumnFromSubQuery($class, $phpName, $failSilently = true): array
     {
         $subQueryCriteria = $this->getSelectQuery($class);
         $tableMap = $subQueryCriteria->getTableMap();
@@ -2321,7 +2342,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return string the fully qualified column name
      */
-    protected function getRealColumnName($columnName)
+    protected function getRealColumnName($columnName): string
     {
         if (!$this->getTableMap()->hasColumnByPhpName($columnName)) {
             throw new UnknownColumnException('Unknown column ' . $columnName . ' in model ' . $this->modelName);
@@ -2341,7 +2362,7 @@ class ModelCriteria extends BaseModelCriteria
      *
      * @return string the fully qualified column name, using table alias if applicable
      */
-    public function getAliasedColName($colName)
+    public function getAliasedColName($colName): string
     {
         if ($this->useAliasInSQL) {
             return $this->modelAlias . substr($colName, strrpos($colName, '.'));
@@ -2375,7 +2396,7 @@ class ModelCriteria extends BaseModelCriteria
      * @return array list of parameters, each parameter being an array like
      *               array('table' => $realtable, 'column' => $column, 'value' => $value)
      */
-    public function getParams()
+    public function getParams(): array
     {
         $params = [];
         $dbMap = Propel::getServiceContainer()->getDatabaseMap($this->getDbName());

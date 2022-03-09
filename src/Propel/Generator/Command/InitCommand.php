@@ -9,13 +9,11 @@
 namespace Propel\Generator\Command;
 
 use Propel\Generator\Builder\Util\PropelTemplate;
-use Propel\Generator\Command\Console\Input\ArrayInput;
 use Propel\Generator\Command\Helper\ConsoleHelper;
-use Propel\Generator\Command\Helper\ConsoleHelper3;
-use Propel\Generator\Command\Helper\ConsoleHelperInterface;
 use Propel\Runtime\Adapter\AdapterFactory;
 use Propel\Runtime\Connection\ConnectionFactory;
 use Propel\Runtime\Connection\Exception\ConnectionException;
+use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Finder\Finder;
@@ -48,7 +46,7 @@ class InitCommand extends AbstractCommand
     /**
      * @return void
      */
-    protected function configure()
+    protected function configure(): void
     {
         parent::configure();
 
@@ -65,7 +63,9 @@ class InitCommand extends AbstractCommand
      */
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $consoleHelper = $this->createConsoleHelper($input, $output);
+        $consoleHelper = new ConsoleHelper($input, $output);
+        $this->getHelperSet()->set($consoleHelper);
+
         $options = [];
 
         $consoleHelper->writeBlock('Propel 2 Initializer');
@@ -181,7 +181,7 @@ class InitCommand extends AbstractCommand
     /**
      * @return string
      */
-    private function detectDefaultPhpDir()
+    private function detectDefaultPhpDir(): string
     {
         if (file_exists(getcwd() . '/src/')) {
             $vendors = Finder::create()->directories()->in(getcwd() . '/src/')->depth(1);
@@ -198,11 +198,11 @@ class InitCommand extends AbstractCommand
     }
 
     /**
-     * @param \Propel\Generator\Command\Helper\ConsoleHelperInterface $consoleHelper
+     * @param \Propel\Generator\Command\Helper\ConsoleHelper $consoleHelper
      *
      * @return string
      */
-    private function initMysql(ConsoleHelperInterface $consoleHelper)
+    private function initMysql(ConsoleHelper $consoleHelper): string
     {
         $host = $consoleHelper->askQuestion('Please enter your database host', 'localhost');
         $port = $consoleHelper->askQuestion('Please enter your database port', '3306');
@@ -212,11 +212,11 @@ class InitCommand extends AbstractCommand
     }
 
     /**
-     * @param \Propel\Generator\Command\Helper\ConsoleHelperInterface $consoleHelper
+     * @param \Propel\Generator\Command\Helper\ConsoleHelper $consoleHelper
      *
      * @return string
      */
-    private function initSqlite(ConsoleHelperInterface $consoleHelper)
+    private function initSqlite(ConsoleHelper $consoleHelper): string
     {
         $path = $consoleHelper->askQuestion('Where should the sqlite database be stored?', getcwd() . '/my.app.sq3');
 
@@ -224,11 +224,11 @@ class InitCommand extends AbstractCommand
     }
 
     /**
-     * @param \Propel\Generator\Command\Helper\ConsoleHelperInterface $consoleHelper
+     * @param \Propel\Generator\Command\Helper\ConsoleHelper $consoleHelper
      *
      * @return string
      */
-    private function initPgsql(ConsoleHelperInterface $consoleHelper)
+    private function initPgsql(ConsoleHelper $consoleHelper): string
     {
         $host = $consoleHelper->askQuestion('Please enter your database host (without port)', 'localhost');
         $port = $consoleHelper->askQuestion('Please enter your database port', '5432');
@@ -238,12 +238,12 @@ class InitCommand extends AbstractCommand
     }
 
     /**
-     * @param \Propel\Generator\Command\Helper\ConsoleHelperInterface $consoleHelper
+     * @param \Propel\Generator\Command\Helper\ConsoleHelper $consoleHelper
      * @param string $rdbms
      *
      * @return mixed
      */
-    private function initDsn(ConsoleHelperInterface $consoleHelper, $rdbms)
+    private function initDsn(ConsoleHelper $consoleHelper, $rdbms)
     {
         switch ($rdbms) {
             case 'oracle':
@@ -267,11 +267,11 @@ class InitCommand extends AbstractCommand
 
     /**
      * @param \Symfony\Component\Console\Output\OutputInterface $output
-     * @param array $options
+     * @param array<string, mixed> $options
      *
      * @return void
      */
-    private function generateProject(OutputInterface $output, array $options)
+    private function generateProject(OutputInterface $output, array $options): void
     {
         $schema = new PropelTemplate();
         $schema->setTemplateFile(__DIR__ . '/templates/schema.xml.php');
@@ -298,7 +298,7 @@ class InitCommand extends AbstractCommand
      *
      * @return void
      */
-    private function buildSqlAndModelsAndConvertConfig(?OutputInterface $output = null)
+    private function buildSqlAndModelsAndConvertConfig(?OutputInterface $output = null): void
     {
         $this->getApplication()->setAutoExit(false);
 
@@ -325,7 +325,7 @@ class InitCommand extends AbstractCommand
      *
      * @return void
      */
-    private function writeFile(OutputInterface $output, $filename, $content)
+    private function writeFile(OutputInterface $output, $filename, $content): void
     {
         $this->getFilesystem()->dumpFile($filename, $content);
 
@@ -333,12 +333,12 @@ class InitCommand extends AbstractCommand
     }
 
     /**
-     * @param \Propel\Generator\Command\Helper\ConsoleHelperInterface $consoleHelper
+     * @param \Propel\Generator\Command\Helper\ConsoleHelper $consoleHelper
      * @param array $options
      *
      * @return bool
      */
-    private function testConnection(ConsoleHelperInterface $consoleHelper, array $options)
+    private function testConnection(ConsoleHelper $consoleHelper, array $options): bool
     {
         $adapter = AdapterFactory::create($options['rdbms']);
 
@@ -359,7 +359,7 @@ class InitCommand extends AbstractCommand
             $consoleHelper->writeln('');
 
             if ($consoleHelper->getOutput()->getVerbosity() === OutputInterface::VERBOSITY_DEBUG) {
-                $consoleHelper->writeln($e);
+                $consoleHelper->writeln('Exception: ' . print_r($e, true));
             }
 
             return false;
@@ -372,7 +372,7 @@ class InitCommand extends AbstractCommand
      *
      * @return string
      */
-    private function reverseEngineerSchema(OutputInterface $output, array $options)
+    private function reverseEngineerSchema(OutputInterface $output, array $options): string
     {
         $outputDir = sys_get_temp_dir();
 
@@ -401,24 +401,5 @@ class InitCommand extends AbstractCommand
         $this->getApplication()->setAutoExit(true);
 
         return $schema;
-    }
-
-    /**
-     * @param \Symfony\Component\Console\Input\InputInterface $input
-     * @param \Symfony\Component\Console\Output\OutputInterface $output
-     *
-     * @return \Propel\Generator\Command\Helper\ConsoleHelperInterface
-     */
-    protected function createConsoleHelper(InputInterface $input, OutputInterface $output)
-    {
-        /* Check if it runs in Symfony3 env — than use QuestionHelper, because DialogHelper is absent */
-        if (class_exists('\Symfony\Component\Console\Helper\QuestionHelper')) {
-            $helper = new ConsoleHelper3($input, $output);
-        } else {
-            $helper = new ConsoleHelper($input, $output);
-        }
-        $this->getHelperSet()->set($helper);
-
-        return $helper;
     }
 }

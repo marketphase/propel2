@@ -129,7 +129,7 @@ class SelectQuerySqlBuilder extends AbstractSqlQueryBuilder
             $sourceTableNames[] = '(' . $subQueryCriteria->createSelectSql($params) . ') AS ' . $subQueryAlias;
         }
 
-        if (empty($sourceTableNames) && $this->criteria->getPrimaryTableName()) {
+        if (!$sourceTableNames && $this->criteria->getPrimaryTableName()) {
             $primaryTable = $this->criteria->getPrimaryTableName();
             $sourceTableNames[] = $this->quoteIdentifierTable($primaryTable);
         }
@@ -204,7 +204,9 @@ class SelectQuerySqlBuilder extends AbstractSqlQueryBuilder
     {
         $joinTables = [];
         foreach ($this->criteria->getJoins() as $join) {
-            $joinTables[] = $join->getRightTableWithAlias();
+            /** @var string $table */
+            $table = $join->getRightTableWithAlias();
+            $joinTables[] = $table;
         }
 
         return $joinTables;

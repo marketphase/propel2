@@ -11,6 +11,7 @@ namespace Propel\Common\Config;
 use Propel\Common\Config\Exception\InvalidArgumentException;
 use Propel\Common\Config\Exception\InvalidConfigurationException;
 use Propel\Common\Config\Loader\DelegatingLoader;
+use RuntimeException;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException as SymfonyInvalidConfigurationException;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\Finder\Finder;
@@ -52,13 +53,18 @@ class ConfigurationManager
      * @param string|null $path Configuration file name or directory in which resides the configuration file.
      * @param array|null $extraConf Array of configuration properties, to be merged with those loaded from file.
      *                              It's useful when passing configuration parameters from command line.
+     *
+     * @throws \RuntimeException
      */
     public function __construct(?string $path = null, ?array $extraConf = [])
     {
         if (!$path) {
             $path = getcwd();
+            if ($path === false) {
+                throw new RuntimeException('Cannot get the current working directory');
+            }
         }
-        if (!isset($extraConf)) {
+        if ($extraConf === null) {
             $extraConf = [];
         }
         $this->config = $this->loadConfig($path, $extraConf);
@@ -70,7 +76,7 @@ class ConfigurationManager
      *
      * @return array
      */
-    public function get()
+    public function get(): array
     {
         return $this->config;
     }
@@ -83,7 +89,7 @@ class ConfigurationManager
      *
      * @return array|null
      */
-    public function getSection($section)
+    public function getSection($section): ?array
     {
         if (!array_key_exists($section, $this->config)) {
             return null;
